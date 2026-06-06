@@ -1,0 +1,66 @@
+@import "tailwindcss";
+
+/* Manual (class-based) dark mode: the app toggles `.dark` on <html>. This variant lets a
+   handful of accent spots opt into theme-specific shades where the neutral remap below
+   isn't enough (e.g. red/emerald text on a translucent surface). */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* Theming strategy: the UI is written dark-first with literal `zinc-*` utilities, and in
+   Tailwind v4 those compile to `var(--color-zinc-*)`. So instead of editing ~150 classes,
+   we swap the zinc ramp by theme. Light = the zinc ramp mirrored (950↔50, 900↔100, …) so
+   "dark background" classes become light surfaces and "light text" becomes dark, with the
+   ordering preserved. Dark = the real zinc ramp, identical to before. Accent ramps
+   (emerald/red/amber) are intentionally left alone — they read on both. */
+:root {
+  color-scheme: light;
+  --color-zinc-50: #09090b;
+  --color-zinc-100: #18181b;
+  --color-zinc-200: #27272a;
+  --color-zinc-300: #3f3f46;
+  --color-zinc-400: #52525b;
+  --color-zinc-500: #71717a;
+  --color-zinc-600: #a1a1aa;
+  --color-zinc-700: #d4d4d8;
+  --color-zinc-800: #e4e4e7;
+  --color-zinc-900: #f4f4f5;
+  --color-zinc-950: #fafafa;
+}
+
+.dark {
+  color-scheme: dark;
+  --color-zinc-50: #fafafa;
+  --color-zinc-100: #f4f4f5;
+  --color-zinc-200: #e4e4e7;
+  --color-zinc-300: #d4d4d8;
+  --color-zinc-400: #a1a1aa;
+  --color-zinc-500: #71717a;
+  --color-zinc-600: #52525b;
+  --color-zinc-700: #3f3f46;
+  --color-zinc-800: #27272a;
+  --color-zinc-900: #18181b;
+  --color-zinc-950: #09090b;
+}
+
+/* Match the body to the page surface so there's no flash at the edges / on overscroll. */
+body {
+  background-color: var(--color-zinc-950);
+}
+
+/* Visible keyboard focus on every interactive element, in the accent color (works on both
+   themes). :focus-visible means this shows for keyboard/AT users but not on mouse click. */
+:focus-visible {
+  outline: 2px solid var(--color-emerald-500);
+  outline-offset: 2px;
+  border-radius: 0.25rem;
+}
+
+/* Respect reduced-motion: the connecting/recording pulse dots stop animating. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

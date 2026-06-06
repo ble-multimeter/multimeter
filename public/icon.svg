@@ -1,0 +1,10 @@
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <rect width="512" height="512" rx="96" fill="#09090b"/>
+  <!-- a simple live-readout glyph: a rising trace over a baseline, in emerald -->
+  <polyline points="80,330 170,300 240,340 320,180 432,140"
+    fill="none" stroke="#34d399" stroke-width="26"
+    stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="256" y="430" text-anchor="middle"
+    font-family="ui-monospace, SFMono-Regular, Menlo, monospace"
+    font-size="92" font-weight="700" fill="#fafafa">V</text>
+</svg>
