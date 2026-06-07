@@ -490,4 +490,66 @@ describe('bdm framer (sync + split/coalesced notifications)', () => {
     expect(out).toHaveLength(1);
     expect([...out[0].bytes]).toEqual(FRAME);
   });
+
+  it('reset clears buffered bytes', () => {
+    const f = bdm.createFramer();
+    f.push(Uint8Array.from(FRAME.slice(0, 5)));
+    f.reset();
+    expect(f.push(Uint8Array.from(FRAME.slice(5)))).toHaveLength(0);
+  });
+});
+
+describe('bdm decode edge cases + driver wiring', () => {
+  const FRAME = [27, 132, 112, 177, 41, 123, 191, 123, 102, 172, 59];
+
+  it('returns a blank reading for a too-short frame (never throws)', () => {
+    const r = decodeBdm(Uint8Array.from([27, 132, 112]), 7);
+    expect(r.function).toBe('?');
+    expect(r.displayText).toBe('');
+    expect(r.displayValue).toBeNull();
+    expect(r.ts).toBe(7);
+  });
+
+  it('returns a blank reading for an empty frame (never throws)', () => {
+    const r = decodeBdm(Uint8Array.from([]), 0);
+    expect(r.function).toBe('?');
+    expect(r.displayValue).toBeNull();
+  });
+
+  it('driver.decode delegates to decodeBdm', () => {
+    const r = bdm.decode(Uint8Array.from(FRAME), 99);
+    expect(r.displayText).toBe('07.27');
+    expect(r.ts).toBe(99);
+  });
+
+  it('matches on the FFF0 service and the BDM name prefix', () => {
+    expect(bdm.match({ services: ['0000fff0-0000-1000-8000-00805f9b34fb'] })).toBe(true);
+    expect(bdm.match({ name: 'BDM35' })).toBe(true);
+    expect(bdm.match({ name: 'Nope' })).toBe(false);
+    expect(bdm.match({})).toBe(false);
+  });
+
+  it('sniffer rejects the other FFF0 families and garbage (cross-rejection)', () => {
+    const sniff = bdm.sniff!;
+    // owon-plus (6), owon-old (14), voltcraft (15) frames — all wrong length / header for bdm.
+    expect(sniff(Uint8Array.from([34, 240, 4, 0, 103, 132]))).toBe(false);
+    expect(sniff(Uint8Array.from([43, 50, 55, 52, 54, 32, 52, 49, 0, 64, 128, 27, 13, 10]))).toBe(
+      false,
+    );
+    expect(sniff(Uint8Array.from([36, 0, 240, 33, 21, 0, 161, 9, 240, 33, 21, 0, 4, 0, 0]))).toBe(
+      false,
+    );
+    // Right length (11) but wrong header bytes.
+    const badHeader = [...FRAME];
+    badHeader[0] = 0x00;
+    expect(sniff(Uint8Array.from(badHeader))).toBe(false);
+    // Garbage / empty.
+    expect(sniff(Uint8Array.from([1, 2, 3]))).toBe(false);
+    expect(sniff(Uint8Array.from([]))).toBe(false);
+  });
+
+  it('exposes the FFF0 GATT profile and the backlight control is absent', () => {
+    expect(bdm.gatt.service).toBe('0000fff0-0000-1000-8000-00805f9b34fb');
+    expect(bdm.verification).toBe('ported-unverified');
+  });
 });

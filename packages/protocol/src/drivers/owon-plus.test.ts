@@ -278,4 +278,58 @@ describe('owon-plus framer (fixed 6-byte slicing + resync)', () => {
     expect(out2).toHaveLength(1);
     expect([...out2[0].bytes]).toEqual(FRAME);
   });
+
+  it('reset clears buffered bytes', () => {
+    const f = owonPlus.createFramer();
+    f.push(Uint8Array.from(FRAME.slice(0, 3)));
+    f.reset();
+    expect(f.push(Uint8Array.from(FRAME.slice(3)))).toHaveLength(0);
+  });
+});
+
+describe('owon-plus special displays (NCV / hFE) + driver wiring', () => {
+  // function = (symbols>>6)&0xf, symbols = data[1]<<8|data[0].
+  // fn 13 (NCV): symbols = 13<<6 = 0x340 → data[0]=0x40, data[1]=0x03. raw = data[5]<<8|data[4].
+  it('renders an NCV strength bar of dashes (fn 13, raw > 0) with no value/unit', () => {
+    const r = decodeOwonPlus(Uint8Array.from([0x40, 0x03, 0, 0, 3, 0]));
+    expect(r.function).toBe('NCV');
+    expect(r.displayText).toBe('---');
+    expect(r.displayUnit).toBe('');
+    expect(r.displayValue).toBeNull();
+  });
+
+  it('renders "EF" for NCV with no field (fn 13, raw == 0)', () => {
+    const r = decodeOwonPlus(Uint8Array.from([0x40, 0x03, 0, 0, 0, 0]));
+    expect(r.function).toBe('NCV');
+    expect(r.displayText).toBe('EF');
+    expect(r.displayValue).toBeNull();
+  });
+
+  it('reports hFE (fn 12) as a bare gain with no SI unit', () => {
+    // fn 12: symbols = 12<<6 = 0x300 → data[0]=0x00, data[1]=0x03.
+    const r = decodeOwonPlus(Uint8Array.from([0x00, 0x03, 0, 0, 100, 0]));
+    expect(r.function).toBe('HFE');
+    expect(r.displayUnit).toBe('');
+  });
+
+  it('returns a blank reading for an empty frame (never throws)', () => {
+    const r = decodeOwonPlus(Uint8Array.from([]), 5);
+    expect(r.function).toBe('?');
+    expect(r.displayValue).toBeNull();
+    expect(r.ts).toBe(5);
+  });
+
+  it('driver.decode delegates to decodeOwonPlus', () => {
+    const r = owonPlus.decode(Uint8Array.from([34, 240, 4, 0, 103, 132]), 42);
+    expect(r.displayText).toBe('-11.27');
+    expect(r.ts).toBe(42);
+  });
+
+  it('matches on the FFF0 service and OWON/BDM name prefixes', () => {
+    expect(owonPlus.match({ services: ['0000fff0-0000-1000-8000-00805f9b34fb'] })).toBe(true);
+    expect(owonPlus.match({ name: 'OWON-B35' })).toBe(true);
+    expect(owonPlus.match({ name: 'BDM' })).toBe(true);
+    expect(owonPlus.match({ name: 'Nope' })).toBe(false);
+    expect(owonPlus.match({})).toBe(false);
+  });
 });

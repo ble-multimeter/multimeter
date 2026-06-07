@@ -175,3 +175,355 @@ describe('MeterSession — FFF0 disambiguation', () => {
     expect(s.getSnapshot().reading).not.toBeNull();
   });
 });
+
+// --- An FFF0 meter whose streaming behaviour we control: optionally emit nothing on subscribe
+// (so we can disconnect mid-sniff), or emit an UNRECOGNIZABLE frame (so the sniffer never matches
+// and the timeout fires). Mirrors installFFF0Meter; getPrimaryService resolves only for FFF0.
+function installFFF0MeterCustom(opts: { onSubscribe?: Uint8Array | null } = {}) {
+  const emitOnSubscribe = opts.onSubscribe;
+  const notify = Object.assign(new EventTarget(), {
+    uuid: FFF0_NOTIFY,
+    properties: { notify: true },
+    value: undefined as DataView | undefined,
+    startNotifications: vi.fn(async function (this: { emit: (f: Uint8Array) => void }) {
+      if (emitOnSubscribe) {
+        const f = emitOnSubscribe;
+        setTimeout(() => this.emit(f), 0);
+      }
+    }),
+    emit(this: { value?: DataView } & EventTarget, frame: Uint8Array) {
+      this.value = new DataView(frame.buffer.slice(0));
+      this.dispatchEvent(new Event('characteristicvaluechanged'));
+    },
+  });
+  const write = Object.assign(new EventTarget(), {
+    uuid: FFF0_WRITE,
+    properties: { write: false, writeWithoutResponse: true },
+    writeValueWithoutResponse: vi.fn().mockResolvedValue(undefined),
+  });
+  const server = {
+    connected: true,
+    disconnect: vi.fn(function (this: { connected: boolean }) {
+      this.connected = false;
+    }),
+    getPrimaryService: vi.fn(async (uuid: string) => {
+      if (uuid !== FFF0_SERVICE) throw new Error('service not present');
+      return { getCharacteristics: vi.fn().mockResolvedValue([notify, write]) };
+    }),
+  };
+  const device = Object.assign(new EventTarget(), {
+    name: undefined,
+    gatt: { connect: vi.fn().mockResolvedValue(server) },
+  });
+  Object.defineProperty(navigator, 'bluetooth', {
+    value: { requestDevice: vi.fn().mockResolvedValue(device) },
+    configurable: true,
+  });
+  return { notify, write, server, device };
+}
+
+describe('MeterSession — reconnect (PLAN §4)', () => {
+  it('re-opens and re-runs the FULL handshake after a drop', async () => {
+    const { device, server, write } = installMeter();
+    const s = new MeterSession();
+    s.connect();
+    await vi.waitFor(() => expect(s.getSnapshot().state).toBe('live'));
+
+    // Sanity: the first handshake issued GET-NAME and GET-DATA.
+    const cmdsOf = () => write.writeValueWithoutResponse.mock.calls.map((c) => c[0][3] as number);
+    expect(cmdsOf()).toContain(GET_NAME);
+    expect(cmdsOf()).toContain(GET_DATA);
+    const writesBeforeDrop = write.writeValueWithoutResponse.mock.calls.length;
+
+    // Simulate the link dropping: the device fires gattserverdisconnected.
+    server.connected = false;
+    device.dispatchEvent(new Event('gattserverdisconnected'));
+    expect(s.getSnapshot().state).toBe('disconnected');
+    // Data is kept so the UI can still show the last value + offer reconnect.
+    expect(s.getSnapshot().reading).not.toBeNull();
+
+    // The same device re-connects on reconnect().
+    server.connected = true;
+    s.reconnect();
+    await vi.waitFor(() => expect(s.getSnapshot().state).toBe('live'));
+
+    // The full handshake re-ran: more writes happened, and GET-NAME + GET-DATA were re-issued.
+    const newCalls = write.writeValueWithoutResponse.mock.calls.slice(writesBeforeDrop);
+    const newCmds = newCalls.map((c) => c[0][3] as number);
+    expect(newCmds).toContain(GET_NAME);
+    expect(newCmds).toContain(GET_DATA);
+  });
+
+  it('passes through reconnecting state on its way back to live', async () => {
+    const { device, server } = installMeter();
+    const s = new MeterSession();
+    s.connect();
+    await vi.waitFor(() => expect(s.getSnapshot().state).toBe('live'));
+
+    server.connected = false;
+    device.dispatchEvent(new Event('gattserverdisconnected'));
+
+    const seen: string[] = [];
+    s.subscribe(() => seen.push(s.getSnapshot().state));
+    server.connected = true;
+    s.reconnect();
+    await vi.waitFor(() => expect(s.getSnapshot().state).toBe('live'));
+    expect(seen).toContain('reconnecting');
+  });
+
+  it('reconnect() with no prior transport falls back to connect()', async () => {
+    installMeter();
+    const s = new MeterSession();
+    // Never connected → no transport. reconnect() must run a fresh connect (chooser + handshake).
+    s.reconnect();
+    await vi.waitFor(() => expect(s.getSnapshot().state).toBe('live'));
+    expect(s.getSnapshot().reading?.function).toBe('DCV');
+  });
+
+  it('goes to error if re-opening GATT fails on reconnect', async () => {
+    const { device, server } = installMeter();
+    const s = new MeterSession();
+    s.connect();
+    await vi.waitFor(() => expect(s.getSnapshot().state).toBe('live'));
+
+    server.connected = false;
+    device.dispatchEvent(new Event('gattserverdisconnected'));
+
+    // The next GATT open rejects → realReconnect's catch surfaces an error state.
+    device.gatt.connect.mockRejectedValueOnce(new Error('radio off'));
+    s.reconnect();
+    await vi.waitFor(() => expect(s.getSnapshot().state).toBe('error'));
+    expect(s.getSnapshot().error).toContain('radio off');
+  });
+});
+
+describe('MeterSession — error handling', () => {
+  it('returns to idle when the chooser is dismissed (NotFoundError)', async () => {
+    installMeter();
+    (navigator.bluetooth!.requestDevice as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+      new DOMException('User cancelled', 'NotFoundError'),
+    );
+    const s = new MeterSession();
+    s.connect();
+    await vi.waitFor(() => expect(s.getSnapshot().state).toBe('idle'));
+    expect(s.getSnapshot().error).toBeNull();
+  });
+
+  it('goes to error (not idle) on a non-NotFound connect failure', async () => {
+    const { server } = installMeter();
+    // No known service is present → openGatt throws a plain Error, not a cancel.
+    server.getPrimaryService.mockRejectedValue(new Error('service not present'));
+    const s = new MeterSession();
+    s.connect();
+    await vi.waitFor(() => expect(s.getSnapshot().state).toBe('error'));
+    expect(s.getSnapshot().error).toBeTruthy();
+  });
+});
+
+describe('MeterSession — FFF0 sniff timeout', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('errors with "could not identify" after SNIFF_TIMEOUT_MS of unrecognizable frames', async () => {
+    vi.useFakeTimers();
+    // 7 bytes: no FFF0 family accepts it (owon-plus 6, bdm 11, owon-old 14, voltcraft 15).
+    installFFF0MeterCustom({ onSubscribe: Uint8Array.from([1, 2, 3, 4, 5, 6, 7]) });
+    const s = new MeterSession();
+    s.connect();
+
+    // Let the connect promise chain + the (rejected-by-sniffer) frame settle. Still sniffing.
+    await vi.advanceTimersByTimeAsync(10);
+    expect(s.getSnapshot().state).toBe('connecting');
+
+    // Advance past the 4 s sniff window → reject → error state.
+    await vi.advanceTimersByTimeAsync(4000);
+    expect(s.getSnapshot().state).toBe('error');
+    expect(s.getSnapshot().error).toContain('could not identify');
+  });
+});
+
+describe('MeterSession — disconnect during sniff', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('aborts a pending identify cleanly → idle, no error, no late state change', async () => {
+    vi.useFakeTimers();
+    // FFF0 meter that never streams a frame, so the session stays in the sniff phase.
+    installFFF0MeterCustom({ onSubscribe: null });
+    const s = new MeterSession();
+    s.connect();
+
+    // Let connect reach the sniff phase (still 'connecting', deviceName set to the generic label).
+    await vi.advanceTimersByTimeAsync(10);
+    expect(s.getSnapshot().state).toBe('connecting');
+
+    // User disconnects before any frame arrives — the identify is aborted as a NotFoundError cancel.
+    s.disconnect();
+    expect(s.getSnapshot().state).toBe('idle');
+    expect(s.getSnapshot().error).toBeNull();
+
+    // Even after the original sniff timeout window elapses, no late 'error' creeps in.
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(s.getSnapshot().state).toBe('idle');
+    expect(s.getSnapshot().error).toBeNull();
+  });
+});
+
+describe('MeterSession — demo mode', () => {
+  const realLocation = window.location;
+  afterEach(() => {
+    vi.useRealTimers();
+    Object.defineProperty(window, 'location', { value: realLocation, configurable: true });
+  });
+
+  function forceDemo() {
+    Object.defineProperty(window, 'location', {
+      value: { ...realLocation, search: '?demo' },
+      configurable: true,
+    });
+  }
+
+  it('runs entirely off a timer without touching Bluetooth', async () => {
+    vi.useFakeTimers();
+    forceDemo();
+    // Prove Bluetooth is never used: remove navigator.bluetooth entirely.
+    Object.defineProperty(navigator, 'bluetooth', { value: undefined, configurable: true });
+
+    const s = new MeterSession();
+    expect(s.isDemo).toBe(true);
+    expect(s.getSnapshot().state).toBe('idle'); // demo is supported even without Web Bluetooth
+
+    s.connect();
+    expect(s.getSnapshot().state).toBe('live');
+    expect(s.getSnapshot().deviceName).toContain('demo');
+
+    // Advance one demo interval → a synthetic reading appears.
+    await vi.advanceTimersByTimeAsync(250);
+    const first = s.getSnapshot().reading;
+    expect(first?.function).toBe('DCV');
+
+    // Another interval → the reading updates (timestamp advances).
+    await vi.advanceTimersByTimeAsync(250);
+    expect(s.getSnapshot().reading).not.toBe(first);
+  });
+
+  it('disconnect stops the demo timer', async () => {
+    vi.useFakeTimers();
+    forceDemo();
+    const s = new MeterSession();
+    s.connect();
+    await vi.advanceTimersByTimeAsync(250);
+    const stopped = s.getSnapshot().reading;
+
+    s.disconnect();
+    expect(s.getSnapshot().state).toBe('idle');
+
+    // No further readings after disconnect even as time advances.
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(s.getSnapshot().reading).toBeNull();
+    expect(stopped).not.toBeNull();
+  });
+});
+
+describe('MeterSession — toggleBacklight', () => {
+  const BACKLIGHT = 0x4b;
+
+  it('writes the backlight command for a uni-t driver', async () => {
+    const { write } = installMeter();
+    const s = new MeterSession();
+    s.connect();
+    await vi.waitFor(() => expect(s.getSnapshot().state).toBe('live'));
+
+    write.writeValueWithoutResponse.mockClear();
+    s.toggleBacklight();
+    await vi.waitFor(() =>
+      expect(write.writeValueWithoutResponse.mock.calls.map((c) => c[0][3] as number)).toContain(
+        BACKLIGHT,
+      ),
+    );
+  });
+
+  it('is a no-op for a driver without controls (owon-plus) and does not throw', async () => {
+    const { write } = installFFF0MeterCustom({ onSubscribe: OWON_PLUS_FRAME });
+    const s = new MeterSession();
+    s.connect();
+    await vi.waitFor(() => expect(s.getSnapshot().state).toBe('live'));
+
+    write.writeValueWithoutResponse.mockClear();
+    expect(() => s.toggleBacklight()).not.toThrow();
+    expect(write.writeValueWithoutResponse).not.toHaveBeenCalled();
+  });
+});
+
+describe('MeterSession — external store', () => {
+  it('static supported mirrors Transport.supported', () => {
+    installMeter();
+    expect(MeterSession.supported).toBe(true);
+    Object.defineProperty(navigator, 'bluetooth', { value: undefined, configurable: true });
+    expect(MeterSession.supported).toBe(false);
+  });
+
+  it('subscribe returns an unsubscribe that stops notifications', async () => {
+    installMeter();
+    const s = new MeterSession();
+    const fn = vi.fn();
+    const unsub = s.subscribe(fn);
+    s.connect();
+    await vi.waitFor(() => expect(s.getSnapshot().state).toBe('live'));
+    expect(fn).toHaveBeenCalled();
+
+    unsub();
+    const after = fn.mock.calls.length;
+    s.disconnect(); // would notify if still subscribed
+    expect(fn.mock.calls.length).toBe(after);
+  });
+});
+
+describe('MeterSession — dispose', () => {
+  it('clears timers/listeners without throwing (demo)', async () => {
+    const realLocation = window.location;
+    vi.useFakeTimers();
+    Object.defineProperty(window, 'location', {
+      value: { ...realLocation, search: '?demo' },
+      configurable: true,
+    });
+    try {
+      const s = new MeterSession();
+      const fn = vi.fn();
+      s.subscribe(fn);
+      s.connect();
+      await vi.advanceTimersByTimeAsync(250);
+
+      expect(() => s.dispose()).not.toThrow();
+
+      // Listeners detached: no notifications after dispose even as time advances.
+      const callsAfterDispose = fn.mock.calls.length;
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(fn.mock.calls.length).toBe(callsAfterDispose);
+    } finally {
+      vi.useRealTimers();
+      Object.defineProperty(window, 'location', { value: realLocation, configurable: true });
+    }
+  });
+
+  it('disposing a live session aborts a pending sniff without throwing', async () => {
+    vi.useFakeTimers();
+    try {
+      installFFF0MeterCustom({ onSubscribe: null });
+      const s = new MeterSession();
+      s.connect();
+      await vi.advanceTimersByTimeAsync(10);
+      expect(s.getSnapshot().state).toBe('connecting');
+      expect(() => s.dispose()).not.toThrow();
+      // dispose() rejects the pending identify as a NotFoundError cancel → realConnect resolves to
+      // idle, and crucially no 'error' state ever appears (no unhandled rejection, no late timeout).
+      await vi.advanceTimersByTimeAsync(5000);
+      expect(s.getSnapshot().state).toBe('idle');
+      expect(s.getSnapshot().error).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});

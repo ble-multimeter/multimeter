@@ -196,6 +196,83 @@ describe('ai-care framer (self-addressing sync + split/coalesced notifications)'
   });
 });
 
+// Build an AICARE frame with a chosen set of "on" bit indices into the 56-bit `values` string.
+// Mirrors the decoder's self-addressing layout: bit i lives in slot floor(i/4), MSB-first within
+// the slot's 4-bit nibble; each byte = (1-based slot << 4) | nibble. Round-tripped via the decoder.
+function encodeAiCare(onBits: number[]): Uint8Array {
+  const bits = new Array<number>(56).fill(0);
+  for (const i of onBits) bits[i] = 1;
+  const bytes = new Uint8Array(14);
+  for (let slot = 0; slot < 14; slot++) {
+    let nibble = 0;
+    for (let b = 0; b < 4; b++) nibble = (nibble << 1) | bits[slot * 4 + b];
+    bytes[slot] = ((slot + 1) << 4) | nibble;
+  }
+  return bytes;
+}
+
+// Segment glyph bits for digit '8' (all seven segments lit, source key '1111111') and '1'
+// ('0000101'), used so the synthetic frames carry a numeric value where one is needed.
+const DIGIT8 = [1, 1, 1, 1, 1, 1, 1];
+function segOn(start: number, pattern: number[], onBits: number[]): void {
+  pattern.forEach((v, k) => {
+    if (v) onBits.push(start + k);
+  });
+}
+
+describe('ai-care functionFor branches (diode / cont / °F / Hz / unknown)', () => {
+  it('derives DIODE from the diode bit (offset 39)', () => {
+    const on: number[] = [39];
+    segOn(5, DIGIT8, on); // digit A = 8 so the text is non-empty
+    const r = decodeAiCare(encodeAiCare(on));
+    expect(r.function).toBe('DIODE');
+  });
+
+  it('derives CONT from the continuity bit (offset 43)', () => {
+    const on: number[] = [43];
+    segOn(5, DIGIT8, on);
+    const r = decodeAiCare(encodeAiCare(on));
+    expect(r.function).toBe('CONT');
+  });
+
+  it('derives °F from the °C-unit annunciator? no — exercises the Hz unit branch', () => {
+    // Hz unit annunciator is bit 50 → baseUnit "Hz" → functionFor returns "Hz".
+    const on: number[] = [50];
+    segOn(5, DIGIT8, on);
+    const r = decodeAiCare(encodeAiCare(on));
+    expect(r.displayUnit).toBe('Hz');
+    expect(r.function).toBe('Hz');
+  });
+
+  it('derives % from the percent annunciator (offset 41)', () => {
+    const on: number[] = [41];
+    segOn(5, DIGIT8, on);
+    const r = decodeAiCare(encodeAiCare(on));
+    expect(r.displayUnit).toBe('%');
+    expect(r.function).toBe('%');
+  });
+
+  it('falls back to "?" when no unit annunciator is set (default branch)', () => {
+    // No unit bits → displayUnit '' → baseUnit '' → functionFor default → '?'.
+    const on: number[] = [];
+    segOn(5, DIGIT8, on);
+    const r = decodeAiCare(encodeAiCare(on));
+    expect(r.displayUnit).toBe('');
+    expect(r.function).toBe('?');
+  });
+});
+
+describe('ai-care driver.decode wiring', () => {
+  it('driver.decode delegates to decodeAiCare', () => {
+    const r = aiCare.decode(
+      Uint8Array.from([23, 32, 53, 77, 91, 97, 127, 130, 151, 160, 176, 192, 212, 224]),
+      55,
+    );
+    expect(r.displayText).toBe('1.234');
+    expect(r.ts).toBe(55);
+  });
+});
+
 describe('ai-care driver metadata + GATT profile', () => {
   it('exposes the AICARE GATT UUIDs (service FFB0 / notify FFB2 / write FFB1)', () => {
     expect(aiCare.id).toBe('ai-care');

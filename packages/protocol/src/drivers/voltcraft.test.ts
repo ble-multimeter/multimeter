@@ -269,4 +269,67 @@ describe('voltcraft framer (sync + split/coalesced notifications)', () => {
     expect(out).toHaveLength(1);
     expect([...out[0].bytes]).toEqual(FRAME);
   });
+
+  it('reset clears buffered bytes', () => {
+    const f = voltcraft.createFramer();
+    f.push(Uint8Array.from(FRAME.slice(0, 6)));
+    f.reset();
+    expect(f.push(Uint8Array.from(FRAME.slice(6)))).toHaveLength(0);
+  });
+});
+
+describe('voltcraft special displays (NCV) + driver wiring', () => {
+  const FRAME = [36, 0, 240, 33, 21, 0, 161, 9, 240, 33, 21, 0, 4, 0, 0];
+
+  // fn = (symbols>>6)&0x1f, symbols = bytes[1]<<8|bytes[0]. fn 13 (NCV): symbols = 13<<6 = 0x340
+  // → bytes[0]=0x40, bytes[1]=0x03. count = bytes[4]<<8|bytes[3]. Markers at bytes[2]/bytes[8].
+  it('renders an NCV strength bar of dashes (fn 13, count > 0) with no unit/value', () => {
+    const r = decodeVoltcraft(
+      Uint8Array.from([0x40, 0x03, 240, 3, 0, 0, 162, 9, 240, 0, 0, 0, 0, 0, 0]),
+    );
+    expect(r.displayText).toBe('---');
+    expect(r.displayUnit).toBe('');
+    expect(r.displayValue).toBeNull();
+  });
+
+  it('renders "EF" for NCV with no field (fn 13, count == 0)', () => {
+    const r = decodeVoltcraft(
+      Uint8Array.from([0x40, 0x03, 240, 0, 0, 0, 162, 9, 240, 0, 0, 0, 0, 0, 0]),
+    );
+    expect(r.displayText).toBe('EF');
+    expect(r.displayValue).toBeNull();
+  });
+
+  it('returns a blank reading for an empty frame (never throws)', () => {
+    const r = decodeVoltcraft(Uint8Array.from([]), 3);
+    expect(r.function).toBe('?');
+    expect(r.displayValue).toBeNull();
+    expect(r.ts).toBe(3);
+  });
+
+  it('driver.decode delegates to decodeVoltcraft', () => {
+    const r = voltcraft.decode(Uint8Array.from(FRAME), 21);
+    expect(r.displayText).toBe('0.5409');
+    expect(r.ts).toBe(21);
+  });
+
+  it('matches on the FFF0 service and VC/Voltcraft name prefixes', () => {
+    expect(voltcraft.match({ services: ['0000fff0-0000-1000-8000-00805f9b34fb'] })).toBe(true);
+    expect(voltcraft.match({ name: 'VC800' })).toBe(true);
+    expect(voltcraft.match({ name: 'Voltcraft-X' })).toBe(true);
+    expect(voltcraft.match({ name: 'Nope' })).toBe(false);
+    expect(voltcraft.match({})).toBe(false);
+  });
+
+  it('sniffer cross-rejects the other FFF0 families', () => {
+    const sniff = looksLikeVoltcraftFrame;
+    expect(sniff(Uint8Array.from([34, 240, 4, 0, 103, 132]))).toBe(false); // owon-plus 6
+    expect(sniff(Uint8Array.from([27, 132, 112, 177, 41, 123, 191, 123, 102, 172, 59]))).toBe(
+      false,
+    ); // bdm 11
+    expect(sniff(Uint8Array.from([43, 50, 55, 52, 54, 32, 52, 49, 0, 64, 128, 27, 13, 10]))).toBe(
+      false,
+    ); // owon-old 14
+    expect(sniff(Uint8Array.from([]))).toBe(false);
+  });
 });

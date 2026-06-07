@@ -286,4 +286,58 @@ describe('owon-old framer (sync + split/coalesced notifications)', () => {
     expect(out).toHaveLength(1);
     expect([...out[0].bytes]).toEqual(FRAME);
   });
+
+  it('drops a byte and resyncs when the CR LF terminator is wrong (false sign start)', () => {
+    const f = owonOld.createFramer();
+    // A leading '+' (false start) whose 14-byte window has no CR LF at 12/13, then the real frame.
+    const decoy = [0x2b, 1, 2, 3, 4, 0x20, 0, 0, 0, 0, 0, 0, 0, 0];
+    const out = f.push(Uint8Array.from([...decoy, ...FRAME]));
+    expect(out).toHaveLength(1);
+    expect([...out[0].bytes]).toEqual(FRAME);
+  });
+
+  it('reset clears buffered bytes', () => {
+    const f = owonOld.createFramer();
+    f.push(Uint8Array.from(FRAME.slice(0, 6)));
+    f.reset();
+    expect(f.push(Uint8Array.from(FRAME.slice(6)))).toHaveLength(0);
+  });
+});
+
+describe('owon-old decode edge cases + driver wiring', () => {
+  const FRAME = [43, 50, 55, 52, 54, 32, 52, 49, 0, 64, 128, 27, 13, 10];
+
+  it('returns a blank reading for an empty frame (never throws)', () => {
+    const r = decodeOwonOld(Uint8Array.from([]), 9);
+    expect(r.function).toBe('?');
+    expect(r.displayValue).toBeNull();
+    expect(r.ts).toBe(9);
+  });
+
+  it('driver.decode delegates to decodeOwonOld', () => {
+    const r = owonOld.decode(Uint8Array.from(FRAME), 11);
+    expect(r.displayText).toBe('274.6');
+    expect(r.ts).toBe(11);
+  });
+
+  it('matches on the FFF0 service and OWON/BDM/B35 name prefixes', () => {
+    expect(owonOld.match({ services: ['0000fff0-0000-1000-8000-00805f9b34fb'] })).toBe(true);
+    expect(owonOld.match({ name: 'B35T' })).toBe(true);
+    expect(owonOld.match({ name: 'OWON' })).toBe(true);
+    expect(owonOld.match({ name: 'BDM' })).toBe(true);
+    expect(owonOld.match({ name: 'Nope' })).toBe(false);
+    expect(owonOld.match({})).toBe(false);
+  });
+
+  it('sniffer cross-rejects the other FFF0 families', () => {
+    const sniff = looksLikeOwonOldFrame;
+    expect(sniff(Uint8Array.from([34, 240, 4, 0, 103, 132]))).toBe(false); // owon-plus 6
+    expect(sniff(Uint8Array.from([27, 132, 112, 177, 41, 123, 191, 123, 102, 172, 59]))).toBe(
+      false,
+    ); // bdm 11
+    expect(sniff(Uint8Array.from([36, 0, 240, 33, 21, 0, 161, 9, 240, 33, 21, 0, 4, 0, 0]))).toBe(
+      false,
+    ); // voltcraft 15
+    expect(sniff(Uint8Array.from([]))).toBe(false);
+  });
 });

@@ -17,6 +17,15 @@ export default defineConfig({
         'apps/*/src/main.tsx',
         '**/*.d.ts',
       ],
+      // Ratchet floor: CI fails if coverage regresses below these. The library packages sit at
+      // 94-100%; the global is held down by apps/web's UI components, which are intentionally
+      // out of unit-test scope (verified in-browser instead). Raise these as coverage grows.
+      thresholds: {
+        statements: 72,
+        branches: 60,
+        functions: 64,
+        lines: 73,
+      },
     },
   },
 });
