@@ -25,7 +25,7 @@ export function ThemeToggle({ dark, onToggle }: { dark: boolean; onToggle: () =>
         <span>☾</span>
       </span>
       <span
-        className={`relative z-10 ml-0.5 h-6 w-6 transform rounded-full bg-white shadow transition-transform ${
+        className={`relative z-10 ml-0.5 h-6 w-6 transform rounded-full bg-white shadow transition-transform dark:bg-[#a1a1aa] ${
           dark ? 'translate-x-[1.5rem]' : 'translate-x-0'
         }`}
       />
