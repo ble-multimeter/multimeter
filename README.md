@@ -21,7 +21,8 @@ no install, no account, no data leaves your machine — and installs as an offli
 - **Statistics** — current, min, max, average, peak-to-peak, std-dev, sample count, duration.
 - **Recording** — capture sessions to IndexedDB; they survive a reload. Pause / resume / stop.
 - **Export** — download any session as **CSV**, or the chart as a **PNG**.
-- **Hold & Pin** — freeze the readout, or pin a value to read hands-free while the stream runs.
+- **Hold, Pin & Copy** — freeze the readout, pin a value to read hands-free while the stream
+  runs, or copy the current reading to the clipboard.
 - **All UT60BT functions** — V / A / Ω, continuity, diode, capacitance, frequency, duty %,
   temperature, and NCV.
 - **PWA** — installable, works offline, light/dark theme that also drives the system UI bars.
