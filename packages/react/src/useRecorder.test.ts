@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { renderHook } from '@testing-library/react';
 import { useRecorder } from './useRecorder';
-import { makeReading } from '../test/readings';
+import { makeReading } from './test-readings';
 import type { Reading } from '@mbtech-nl/multimeter-protocol';
 
 // Drive the hook by re-rendering with a new reading each time, like the live stream does.

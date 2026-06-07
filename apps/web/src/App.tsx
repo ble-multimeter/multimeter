@@ -6,10 +6,10 @@
 // so Back works and a session is bookmarkable.
 import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
-import { useMeter } from './hooks/useMeter';
-import { useRecorder } from './hooks/useRecorder';
-import { useSessions } from './hooks/useSessions';
-import { usePinSession } from './hooks/usePinSession';
+import { useMeter } from '@mbtech-nl/multimeter-react';
+import { useRecorder } from '@mbtech-nl/multimeter-react';
+import { useSessions } from '@mbtech-nl/multimeter-react';
+import { usePinSession } from '@mbtech-nl/multimeter-react';
 import type { Reading } from '@mbtech-nl/multimeter-protocol';
 import { useTheme } from './hooks/useTheme';
 import { useChartColor } from './hooks/useChartColor';

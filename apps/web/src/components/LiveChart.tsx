@@ -11,7 +11,7 @@ import type { AlignedData, Options } from 'uplot';
 import 'uplot/dist/uPlot.min.css';
 import { decimate } from '@mbtech-nl/multimeter-protocol';
 import type { Sample } from '@mbtech-nl/multimeter-protocol';
-import type { SegmentInfo } from '../hooks/useRecorder';
+import type { SegmentInfo } from '@mbtech-nl/multimeter-react';
 
 const MAX_POINTS = 2000; // render cap; full resolution lives in IndexedDB
 

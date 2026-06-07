@@ -3,7 +3,7 @@
 // chart canvas.
 import { storage } from '@mbtech-nl/multimeter-recorder';
 import { toCsv } from '@mbtech-nl/multimeter-protocol';
-import { downloadText, downloadBlob, slug } from './download';
+import { downloadText, downloadBlob, slug } from '@mbtech-nl/multimeter-recorder';
 
 export async function exportCsv(target: { id: string; name: string }): Promise<void> {
   const readings = await storage.getReadings(target.id);

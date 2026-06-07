@@ -3,9 +3,9 @@
 // is a normal recording, so the finished result lives in Recordings — this panel is just the
 // live capture controls plus a running list and the match-spread ("are these matched?") answer.
 import type { Reading } from '@mbtech-nl/multimeter-protocol';
-import type { PinSession as PinSessionState } from '../hooks/usePinSession';
+import type { PinSession as PinSessionState } from '@mbtech-nl/multimeter-react';
 import { toCsv } from '@mbtech-nl/multimeter-protocol';
-import { downloadText, slug } from '../lib/download';
+import { downloadText, slug } from '@mbtech-nl/multimeter-recorder';
 
 function fmtNum(v: number): string {
   const abs = Math.abs(v);

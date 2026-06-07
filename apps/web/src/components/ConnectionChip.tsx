@@ -2,7 +2,7 @@
 // per-device options menu, laid out in the top bar alongside the view tabs (PLAN §3.2). The
 // colored status dot is decorative — the state is always also spelled out in text for AT users.
 import { useEffect, useRef, useState } from 'react';
-import type { Meter, MeterState } from '../hooks/useMeter';
+import type { Meter, MeterState } from '@mbtech-nl/multimeter-react';
 
 const STATE_LABEL: Record<MeterState, string> = {
   unsupported: 'unsupported',
