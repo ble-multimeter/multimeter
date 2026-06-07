@@ -16,6 +16,7 @@ import { useChartColor } from './hooks/useChartColor';
 import { resolveStroke } from './lib/chartColors';
 import { ConnectionStatus, DeviceMenu, connectionAction } from './components/ConnectionChip';
 import { HeroReadout } from './components/HeroReadout';
+import { CopyButton } from './components/CopyButton';
 import type { LiveChartHandle } from './components/LiveChart';
 import { StatsPanel } from './components/StatsPanel';
 import { RecordControls } from './components/RecordControls';
@@ -218,8 +219,9 @@ export default function App() {
                 displayReading ? (
                   <div className="mx-auto flex w-full max-w-3xl flex-col gap-5 px-4 py-4">
                     <HeroReadout reading={displayReading} held={held !== null} />
-                    {meter.state === 'live' && (
-                      <div className="-mt-2 flex justify-center">
+                    <div className="-mt-2 flex items-center justify-center gap-2">
+                      <CopyButton reading={displayReading} />
+                      {meter.state === 'live' && (
                         <button
                           onClick={toggleHold}
                           aria-pressed={held !== null}
@@ -231,8 +233,8 @@ export default function App() {
                         >
                           {held ? 'Holding' : 'Hold'}
                         </button>
-                      </div>
-                    )}
+                      )}
+                    </div>
                     <Suspense fallback={<ChartSkeleton />}>
                       <LiveChart
                         ref={chartRef}
