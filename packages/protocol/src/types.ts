@@ -61,7 +61,11 @@ export interface Session {
   segments: { seg: number; function: string; acdc: string; unit: string }[];
 }
 
-// Index = frame[3] & 0x7F (PROTOCOL §3). '✓' codes were verified on our UT60BTk.
+// Index = frame[3] & 0x7F (PROTOCOL §3). Codes 0–21 were verified on our UT60BT. Codes 22–31
+// are ported from the source Windows app's `DecoderUni_T.cs` `functionStrings` for other UT-series
+// models (e.g. LPF low-pass AC, combined AC+DC, inrush) — present so those meters show a sensible
+// label + unit instead of "#22", but unverified on hardware. The source reuses ACA/DCA/LPF names
+// across several codes; mirrored verbatim since decode keys the unit table off the same name.
 export const FUNCTIONS = [
   'ACV',
   'ACmV',
@@ -85,6 +89,17 @@ export const FUNCTIONS = [
   'Live',
   'NCV',
   'LozV',
+  'ACA', // 22 — duplicate code for ACA on some models (source `functionStrings`)
+  'DCA', // 23 — duplicate code for DCA
+  'LPF', // 24 — low-pass-filtered AC voltage
+  'AC/DC', // 25 — combined AC/DC voltage
+  'LPF', // 26
+  'AC+DC', // 27 — combined AC+DC current
+  'LPFA', // 28
+  'AC+DC2', // 29
+  'INRUSH', // 30 — inrush current capture
+  // Source index 31 is a blank placeholder; we omit it so an out-of-range code still falls
+  // back to "#31" (graceful degradation) rather than an empty function name.
 ] as const;
 
 // Range digit (frame[4] − 0x30) selects the displayed unit *and* metric prefix.
@@ -114,6 +129,13 @@ export const RANGE_UNITS: Record<string, string[]> = {
   HFE: [''],
   Live: [''],
   NCV: [''],
+  // Ported from DecoderUni_T.cs for codes 22–31 (other UT models; unverified on hardware).
+  LPF: ['V', 'V', 'V', 'V'],
+  'AC/DC': ['V', 'V', 'V', 'V'],
+  LPFA: ['V', 'V', 'V', 'V'],
+  'AC+DC': ['A', 'A'],
+  'AC+DC2': ['A', 'A'],
+  INRUSH: ['V', 'V', 'V', 'V'],
 };
 
 // Functions where the AC/DC distinction is meaningful — these report acdc from

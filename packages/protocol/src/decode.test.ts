@@ -321,3 +321,34 @@ describe('graceful degradation', () => {
     expect(r.displayValue).toBeNull();
   });
 });
+
+describe('extended function codes (other UT-series models, ported/unverified)', () => {
+  // Reuse a real ACV frame layout and re-tag the function/range bytes. These codes never came
+  // off our UT60BT, so we assert only the table lookup (label + unit), not hardware behavior.
+  const base = 'ab cd 10 00 30 20 20 32 37 34 2e 37 00 00 00 00 08 03 02';
+  const retag = (fn: number, range = 0x30) => {
+    const b = hex(base);
+    b[3] = fn;
+    b[4] = range;
+    return b;
+  };
+
+  it('code 25 → AC/DC voltage in V', () => {
+    const r = decode(retag(25));
+    expect(r.function).toBe('AC/DC');
+    expect(r.displayUnit).toBe('V');
+    expect(r.baseUnit).toBe('V');
+  });
+
+  it('code 27 → AC+DC current in A', () => {
+    const r = decode(retag(27, 0x31));
+    expect(r.function).toBe('AC+DC');
+    expect(r.displayUnit).toBe('A');
+  });
+
+  it('code 30 → INRUSH in V', () => {
+    const r = decode(retag(30));
+    expect(r.function).toBe('INRUSH');
+    expect(r.displayUnit).toBe('V');
+  });
+});

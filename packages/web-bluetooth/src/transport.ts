@@ -56,8 +56,15 @@ export class Transport {
     namePrefixes: string[] = allNamePrefixes(),
   ): Promise<string> {
     const services = [...new Set(profiles.map((p) => p.gatt.service))];
+    // Match by advertised name prefix OR by service UUID. The UT60BT advertises a name, but the
+    // 0xFFF0 family (bdm/owon/voltcraft) advertises inconsistent or blank names — so a service
+    // filter is what makes those discoverable (PLAN §6 "device-type selection"). A device shows
+    // in the chooser if it matches ANY filter.
     const device = await navigator.bluetooth.requestDevice({
-      filters: namePrefixes.map((namePrefix) => ({ namePrefix })),
+      filters: [
+        ...namePrefixes.map((namePrefix) => ({ namePrefix })),
+        ...services.map((service) => ({ services: [service] })),
+      ],
       optionalServices: [...services, DEVICE_INFO_SERVICE],
     });
     this.device = device;

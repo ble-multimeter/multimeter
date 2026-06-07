@@ -4,8 +4,9 @@
 
 import type { Driver, DriverMatchContext } from './types';
 import { uniT } from './uni-t';
+import { bdm } from './bdm';
 
-export const drivers: Driver[] = [uniT];
+export const drivers: Driver[] = [uniT, bdm];
 
 /** Every distinct GATT service UUID, for requestDevice `optionalServices`. */
 export function allServices(): string[] {

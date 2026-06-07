@@ -67,9 +67,11 @@ describe('requestAndConnect', () => {
     t.onChunk = (b) => chunks.push(b);
     await t.requestAndConnect();
 
-    expect(requestDevice).toHaveBeenCalledWith(
-      expect.objectContaining({ filters: [{ namePrefix: 'UT60BT' }] }),
-    );
+    // Filters offer every driver's name prefix AND every driver's service UUID (so the
+    // name-less 0xFFF0 family is still discoverable). A device matches if ANY filter matches.
+    const filters = requestDevice.mock.calls[0][0].filters as Array<Record<string, unknown>>;
+    expect(filters).toEqual(expect.arrayContaining([{ namePrefix: 'UT60BT' }]));
+    expect(filters.some((f) => Array.isArray(f.services))).toBe(true);
     expect(t.deviceName).toBe('UT60BT_AB');
     expect(t.connected).toBe(true);
     expect(notify.startNotifications).toHaveBeenCalledTimes(1);
