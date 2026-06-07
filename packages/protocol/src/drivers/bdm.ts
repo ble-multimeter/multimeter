@@ -230,6 +230,15 @@ class BdmFramer implements DriverFramer {
   }
 }
 
+/**
+ * Frame sniffer for the shared-0xFFF0 collision: a BDM frame is exactly 11 bytes and starts with
+ * the constant raw header 0x1B 0x84 (= descrambled 0x1B84 — see the framer). Distinct from the
+ * other FFF0 families by length alone (owon-plus 6, owon-old 14, voltcraft 15).
+ */
+export function looksLikeBdmFrame(bytes: Uint8Array): boolean {
+  return bytes.length === FRAME_LEN && bytes[0] === SYNC0 && bytes[1] === SYNC1;
+}
+
 const FFF0_SERVICE = '0000fff0-0000-1000-8000-00805f9b34fb';
 const FFF4_NOTIFY = '0000fff4-0000-1000-8000-00805f9b34fb';
 const FFF3_WRITE = '0000fff3-0000-1000-8000-00805f9b34fb';
@@ -259,4 +268,6 @@ export const bdm: Driver = {
   },
 
   decode: (bytes, ts) => decodeBdm(bytes, ts),
+
+  sniff: looksLikeBdmFrame,
 };

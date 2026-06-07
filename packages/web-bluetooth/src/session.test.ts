@@ -115,3 +115,63 @@ describe('MeterSession', () => {
     expect(server.disconnect).toHaveBeenCalled();
   });
 });
+
+// --- FFF0 shared-service disambiguation ---
+const FFF0_SERVICE = '0000fff0-0000-1000-8000-00805f9b34fb';
+const FFF0_NOTIFY = '0000fff4-0000-1000-8000-00805f9b34fb';
+const FFF0_WRITE = '0000fff3-0000-1000-8000-00805f9b34fb';
+// A real 6-byte owon-plus frame (from owon-plus's fixtures). Its 6-byte length is what tells it
+// apart from the other FFF0 families (bdm 11, owon-old 14, voltcraft 15).
+const OWON_PLUS_FRAME = Uint8Array.from([34, 240, 4, 0, 103, 132]);
+
+// An FFF0 meter that, like the real hardware, just streams a frame once notifications start —
+// no handshake. getPrimaryService resolves ONLY for FFF0 so the transport matches that profile.
+function installFFF0Meter() {
+  const notify = Object.assign(new EventTarget(), {
+    uuid: FFF0_NOTIFY,
+    properties: { notify: true },
+    value: undefined as DataView | undefined,
+    startNotifications: vi.fn(async function (this: { emit: (f: Uint8Array) => void }) {
+      setTimeout(() => this.emit(OWON_PLUS_FRAME), 0);
+    }),
+    emit(this: { value?: DataView } & EventTarget, frame: Uint8Array) {
+      this.value = new DataView(frame.buffer.slice(0));
+      this.dispatchEvent(new Event('characteristicvaluechanged'));
+    },
+  });
+  const write = Object.assign(new EventTarget(), {
+    uuid: FFF0_WRITE,
+    properties: { write: false, writeWithoutResponse: true },
+    writeValueWithoutResponse: vi.fn().mockResolvedValue(undefined),
+  });
+  const server = {
+    connected: true,
+    disconnect: vi.fn(),
+    getPrimaryService: vi.fn(async (uuid: string) => {
+      if (uuid !== FFF0_SERVICE) throw new Error('service not present');
+      return { getCharacteristics: vi.fn().mockResolvedValue([notify, write]) };
+    }),
+  };
+  const device = Object.assign(new EventTarget(), {
+    name: undefined,
+    gatt: { connect: vi.fn().mockResolvedValue(server) },
+  });
+  Object.defineProperty(navigator, 'bluetooth', {
+    value: { requestDevice: vi.fn().mockResolvedValue(device) },
+    configurable: true,
+  });
+  return { notify, server };
+}
+
+describe('MeterSession — FFF0 disambiguation', () => {
+  it('identifies the family by sniffing the first frame (owon-plus)', async () => {
+    installFFF0Meter();
+    const s = new MeterSession();
+    s.connect();
+    await vi.waitFor(() => expect(s.getSnapshot().state).toBe('live'));
+    // Sniffed as owon-plus → its label surfaces (device advertised no name) and decode produced a
+    // reading from the 6-byte frame (proof the right decoder was selected, not the first FFF0 one).
+    expect(s.getSnapshot().deviceName).toContain('Owon');
+    expect(s.getSnapshot().reading).not.toBeNull();
+  });
+});

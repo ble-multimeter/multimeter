@@ -10,6 +10,8 @@
 import {
   drivers,
   driverById,
+  driversForService,
+  sniffDriver,
   type Driver,
   type DriverFramer,
   type DriverIO,
@@ -37,6 +39,7 @@ export interface MeterSnapshot {
 
 const errMsg = (e: unknown) => (e instanceof Error ? `${e.name}: ${e.message}` : String(e));
 const DEMO_INTERVAL_MS = 250; // the meter's ~4 Hz
+const SNIFF_TIMEOUT_MS = 4000; // give up identifying a shared-service meter after this
 
 export class MeterSession {
   readonly isDemo = isDemoMode();
@@ -48,6 +51,15 @@ export class MeterSession {
   private driver: Driver | null = null;
   private framer: DriverFramer | null = null;
   private demoTimer: ReturnType<typeof setInterval> | null = null;
+
+  // Non-null only while disambiguating a shared GATT service (the 0xFFF0 family): we buffer raw
+  // chunks and sniff the first frame to pick the decoder before committing to a driver.
+  private sniffing: {
+    candidates: Driver[];
+    buf: number[];
+    resolve: () => void;
+    reject: (e: unknown) => void;
+  } | null = null;
 
   // One-shot waiters the handshake parks on, resolved when a matching frame arrives — this
   // sequences GET-NAME → (name) → GET-DATA → (stream) off real events instead of blind timers.
@@ -96,6 +108,10 @@ export class MeterSession {
   };
   disconnect = (): void => {
     this.stopDemo();
+    // Abort an in-flight identify so its promise/timer doesn't outlive the connection. Treated as
+    // a user cancel (NotFoundError) by realConnect's catch → idle.
+    this.sniffing?.reject(new DOMException('disconnected during identify', 'NotFoundError'));
+    this.sniffing = null;
     this.transport?.disconnect();
     this.transport = null;
     this.framer?.reset();
@@ -108,6 +124,8 @@ export class MeterSession {
   /** Release timers/listeners (call from the binding's unmount cleanup). */
   dispose = (): void => {
     this.stopDemo();
+    this.sniffing?.reject(new DOMException('disposed', 'NotFoundError'));
+    this.sniffing = null;
     this.waiters = [];
     this.listeners.clear();
   };
@@ -142,10 +160,19 @@ export class MeterSession {
     this.transport = t;
     try {
       const id = await t.requestAndConnect();
-      this.driver = driverById(id) ?? drivers[0];
-      this.framer = this.driver.createFramer();
-      this.set({ deviceName: t.deviceName ?? this.driver.label });
-      await this.handshake();
+      const matched = driverById(id) ?? drivers[0];
+      const candidates = driversForService(matched.gatt.service);
+      if (candidates.length > 1) {
+        // Several meter families share this GATT service (0xFFF0). The transport can't tell them
+        // apart by service alone, so identify by the shape of the first frame.
+        this.set({ deviceName: t.deviceName ?? 'Multimeter' });
+        await this.sniffDriverForService(candidates);
+      } else {
+        this.driver = matched;
+        this.framer = this.driver.createFramer();
+        this.set({ deviceName: t.deviceName ?? this.driver.label });
+        await this.handshake();
+      }
     } catch (e) {
       // User dismissing the chooser throws NotFoundError — a cancel, not a failure.
       if (e instanceof DOMException && e.name === 'NotFoundError') {
@@ -177,7 +204,54 @@ export class MeterSession {
     await this.driver.handshake(this.io);
   }
 
+  // Resolve once a registered candidate's `sniff` accepts the first frame; reject on timeout.
+  private sniffDriverForService(candidates: Driver[]): Promise<void> {
+    return new Promise<void>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        if (this.sniffing) {
+          this.sniffing = null;
+          reject(new Error('could not identify the meter: no recognizable frame on this service'));
+        }
+      }, SNIFF_TIMEOUT_MS);
+      this.sniffing = {
+        candidates,
+        buf: [],
+        resolve: () => {
+          clearTimeout(timer);
+          resolve();
+        },
+        reject: (e) => {
+          clearTimeout(timer);
+          reject(e);
+        },
+      };
+    });
+  }
+
+  // Accumulate raw bytes and try to identify the driver. Buffering tolerates a frame split across
+  // notifications; once a candidate matches we commit and replay the bytes through its framer so
+  // the first reading isn't dropped. The 0xFFF0 families need no handshake (they stream on
+  // subscribe), so we go straight to streaming — revisit if a sniffed driver ever needs one.
+  private trySniff(chunk: Uint8Array): void {
+    const s = this.sniffing;
+    if (!s) return;
+    for (const b of chunk) s.buf.push(b);
+    const frame = Uint8Array.from(s.buf);
+    const picked = sniffDriver(s.candidates, frame);
+    if (!picked) return; // keep buffering until a frame completes or the timeout fires
+    this.sniffing = null;
+    this.driver = picked;
+    this.framer = picked.createFramer();
+    this.set({ deviceName: this.transport?.deviceName ?? picked.label });
+    s.resolve();
+    this.handleChunk(frame);
+  }
+
   private handleChunk = (chunk: Uint8Array): void => {
+    if (this.sniffing) {
+      this.trySniff(chunk);
+      return;
+    }
     if (!this.framer || !this.driver) return;
     for (const f of this.framer.push(chunk)) {
       if (f.kind === 'measurement') {

@@ -9,6 +9,10 @@
 import type { Reading } from '../types';
 import type { FrameKind, ParsedFrame } from '../framing';
 
+// Re-export the framing types so drivers can pull everything they need from one module
+// (`./types`) — several drivers import ParsedFrame/FrameKind from here.
+export type { FrameKind, ParsedFrame } from '../framing';
+
 // A stateful framing buffer (one per connection). Structurally matches FrameParser so a
 // driver can return `new FrameParser()` directly.
 export interface DriverFramer {
@@ -53,4 +57,9 @@ export interface Driver {
   onRequest(frame: ParsedFrame, io: DriverIO): void; // answer keep-alive requests
   decode(bytes: Uint8Array, ts: number): Reading;
   controls?: { backlight?: Uint8Array }; // optional meter commands the device honors
+  // Disambiguate families that share one GATT service (the 0xFFF0 group: bdm/owon-plus/owon-old/
+  // voltcraft). Given a raw notification frame, return true iff it matches this driver's format
+  // (length + header/marker/checksum). Only required when >1 registered driver shares a service;
+  // the session sniffs the first frame against the candidates to pick the right decoder (PLAN §6).
+  sniff?(bytes: Uint8Array): boolean;
 }
