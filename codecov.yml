@@ -1,0 +1,11 @@
+# Keep CI green while coverage is still growing: allow small dips on the whole project,
+# and report new-code coverage without failing the build on it.
+coverage:
+  status:
+    project:
+      default:
+        target: auto
+        threshold: 2%
+    patch:
+      default:
+        informational: true

@@ -1,5 +1,8 @@
 # Multimeter
 
+[![CI](https://github.com/mbtech-nl/multimeter/actions/workflows/ci.yml/badge.svg)](https://github.com/mbtech-nl/multimeter/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/mbtech-nl/multimeter/graph/badge.svg)](https://codecov.io/gh/mbtech-nl/multimeter)
+
 A browser companion for the **UNI-T UT60BT** Bluetooth multimeter: a live, full-screen
 readout with charting, statistics, recording, and CSV/PNG export. It runs entirely in your
 browser over [Web Bluetooth](https://developer.mozilla.org/docs/Web/API/Web_Bluetooth_API) —
@@ -61,12 +64,12 @@ no install, no account, no data leaves your machine — and installs as an offli
 Web Bluetooth is required, which means a **Chromium-based browser** in a secure context
 (HTTPS or `localhost`):
 
-| Platform | Works | Notes |
-| --- | --- | --- |
-| Chrome / Edge / Brave / Opera (desktop) | ✅ | Linux, macOS, Windows, ChromeOS |
-| Chrome (Android) | ✅ | Connect the meter directly from the phone |
-| Firefox / Safari | ❌ | No Web Bluetooth |
-| iOS / iPadOS | ❌ | No Web Bluetooth (works only via a WebBLE browser like Bluefy) |
+| Platform                                | Works | Notes                                                          |
+| --------------------------------------- | ----- | -------------------------------------------------------------- |
+| Chrome / Edge / Brave / Opera (desktop) | ✅    | Linux, macOS, Windows, ChromeOS                                |
+| Chrome (Android)                        | ✅    | Connect the meter directly from the phone                      |
+| Firefox / Safari                        | ❌    | No Web Bluetooth                                               |
+| iOS / iPadOS                            | ❌    | No Web Bluetooth (works only via a WebBLE browser like Bluefy) |
 
 Power on the meter, then click **Connect** and choose it in the browser's device chooser.
 
@@ -86,14 +89,14 @@ npm test         # unit tests (vitest)
 
 ## Keyboard shortcuts
 
-| Key | Action | Key | Action |
-| --- | --- | --- | --- |
-| `c` | Connect / disconnect | `e` | Export CSV |
-| `b` | Toggle backlight | `i` | Export chart PNG |
-| `h` | Hold / release | `v` | Switch Live / Recordings |
-| `Space` | Pin current reading | `s` | Announce reading (a11y) |
-| `r` | Start / stop recording | `t` | Toggle light / dark |
-| `p` | Pause / resume recording | `?` | Show this help |
+| Key     | Action                   | Key | Action                   |
+| ------- | ------------------------ | --- | ------------------------ |
+| `c`     | Connect / disconnect     | `e` | Export CSV               |
+| `b`     | Toggle backlight         | `i` | Export chart PNG         |
+| `h`     | Hold / release           | `v` | Switch Live / Recordings |
+| `Space` | Pin current reading      | `s` | Announce reading (a11y)  |
+| `r`     | Start / stop recording   | `t` | Toggle light / dark      |
+| `p`     | Pause / resume recording | `?` | Show this help           |
 
 ## How it works
 
