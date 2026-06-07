@@ -33,7 +33,11 @@ export interface Meter {
 const errMsg = (e: unknown) => (e instanceof Error ? `${e.name}: ${e.message}` : String(e));
 
 export function useMeter(): Meter {
-  const [state, setState] = useState<MeterState>(Transport.supported ? 'idle' : 'unsupported');
+  // Demo never touches Bluetooth, so it must run even where Web Bluetooth is absent —
+  // start 'idle' (the effect below takes it to 'live') rather than 'unsupported'.
+  const [state, setState] = useState<MeterState>(
+    isDemoMode() || Transport.supported ? 'idle' : 'unsupported',
+  );
   const [reading, setReading] = useState<Reading | null>(null);
   const [deviceName, setDeviceName] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
