@@ -25,6 +25,10 @@ export function useTheme() {
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', theme === 'dark');
+    // Keep the PWA system UI bars (status/navigation) in step with the in-app theme. The
+    // theme-color meta has no media query, so it follows our resolved theme, not the OS.
+    const meta = document.querySelector('meta[name="theme-color"]');
+    meta?.setAttribute('content', theme === 'dark' ? '#09090b' : '#fafafa');
     try {
       localStorage.setItem('theme', theme);
     } catch {

@@ -3,8 +3,10 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#fafafa" media="(prefers-color-scheme: light)" />
-    <meta name="theme-color" content="#09090b" media="(prefers-color-scheme: dark)" />
+    <!-- Single theme-color (no media query): the in-app toggle overrides the OS preference,
+         so the system UI bars must follow the app's resolved theme, not prefers-color-scheme.
+         The pre-paint script below sets the right value; useTheme keeps it in sync on toggle. -->
+    <meta name="theme-color" content="#09090b" />
 
     <title>Multimeter — Bluetooth DMM logger in your browser (UNI-T UT60BT)</title>
     <meta
@@ -48,6 +50,8 @@
             t = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
           }
           if (t === 'dark') document.documentElement.classList.add('dark');
+          var m = document.querySelector('meta[name="theme-color"]');
+          if (m) m.setAttribute('content', t === 'dark' ? '#09090b' : '#fafafa');
         } catch (e) {}
       })();
     </script>
