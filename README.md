@@ -75,11 +75,16 @@ Power on the meter, then click **Connect** and choose it in the browser's device
 
 ## Getting started
 
+This is a [pnpm](https://pnpm.io) workspace: the app lives in `apps/web` and the reusable logic
+is split into packages under `packages/` (see [Packages](#packages)).
+
 ```bash
-npm install
-npm run dev      # Vite dev server (also exposed on the LAN for phone testing)
-npm run build    # type-check + production build
-npm test         # unit tests (vitest)
+pnpm install
+pnpm dev         # Vite dev server for apps/web (also on the LAN for phone testing)
+pnpm build       # build every package + the app
+pnpm test        # all unit tests (vitest)
+pnpm typecheck   # tsc across the workspace
+pnpm lint        # eslint across the workspace
 ```
 
 > **No meter handy?** Append `?demo` to the URL (e.g. `localhost:5173/multimeter/?demo`)
@@ -103,11 +108,31 @@ npm test         # unit tests (vitest)
 The UT60BT speaks a simple BLE protocol: the app subscribes to a notify characteristic,
 runs the meter's handshake, and decodes each 19-byte measurement frame into a reading
 (function, value, unit, flags). The protocol was reverse-engineered from the device; decode
-logic is pure and unit-tested against captured frames.
+logic is pure and unit-tested against captured frames. Decode + framing sit behind a `Driver`
+interface in the protocol package, so other BLE multimeters can be added as drivers without
+touching the transport, recording, or UI (a later phase).
+
+## Packages
+
+The app is a thin shell over framework-agnostic packages, so you can build your own
+BLE-multimeter UI (in React **or** Vue) or a headless Node tool on top:
+
+| Package                               | What it is                                                                                                                                                                |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@mbtech-nl/multimeter-protocol`      | Pure, I/O-free core: the `Reading` model + unit tables, the uni-t decode/framing, stats/decimate/CSV, and the device-`Driver` interface + registry. Zero deps; Node-safe. |
+| `@mbtech-nl/multimeter-web-bluetooth` | Web Bluetooth `Transport` + the framework-agnostic `MeterSession` engine (connect · handshake · keep-alive · reconnect · demo).                                           |
+| `@mbtech-nl/multimeter-recorder`      | Bluetooth-independent `RecorderSession` · `SessionsStore` · `PinRecorder` engines + the IndexedDB session store.                                                          |
+| `@mbtech-nl/multimeter-react`         | React hooks: `useMeter` · `useRecorder` · `useSessions` · `usePinSession`.                                                                                                |
+| `@mbtech-nl/multimeter-vue`           | The same four as Vue composables.                                                                                                                                         |
+
+`apps/web` consumes `@mbtech-nl/multimeter-react`, so the app dogfoods the binding it ships.
+The packages are structured to be publishable (per-package build → ESM + types) but aren't on
+npm yet.
 
 ## Tech stack
 
-React 19 · TypeScript · Vite · Tailwind CSS · uPlot · vite-plugin-pwa · Web Bluetooth · IndexedDB.
+React 19 · Vue 3 · TypeScript · Vite · Tailwind CSS · uPlot · vite-plugin-pwa · Web Bluetooth ·
+IndexedDB · pnpm workspace.
 
 ## License
 

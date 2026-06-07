@@ -5,9 +5,11 @@ coverage
 .DS_Store
 *.tsbuildinfo
 
-# Internal working docs — kept on disk, not in the repo
+# Internal process/planning docs — kept on disk, not in the repo (public docs like README
+# and CONTRIBUTING ARE tracked).
 HANDOFF.md
 PLAN.md
 PROTOCOL.md
 progress.md
+PUBLISHING.md
 captures/
