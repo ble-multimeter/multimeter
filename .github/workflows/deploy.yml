@@ -2,7 +2,7 @@ name: Deploy to GitHub Pages
 
 # Build the Vite app (apps/web) and publish its dist/ to GitHub Pages on every push to main.
 # Pages must be set to "GitHub Actions" as its source (Settings → Pages → Build and
-# deployment → Source). Served as a project site at mbtech-nl.github.io/multimeter/, so the
+# deployment → Source). Served as a project site at ble-multimeter.github.io/multimeter/, so the
 # repo must be named `multimeter` (Vite `base` is /multimeter/ to match).
 
 on:

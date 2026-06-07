@@ -7,7 +7,7 @@ import { VitePWA } from 'vite-plugin-pwa';
 // Web Bluetooth needs a secure context: localhost (dev) is fine; for phone testing
 // over the LAN you'd need HTTPS. `host: true` exposes the dev server on the network.
 //
-// Hosted as a GitHub Pages project site at mbtech-nl.github.io/multimeter/ (PLAN §9), so
+// Hosted as a GitHub Pages project site at ble-multimeter.github.io/multimeter/ (PLAN §9), so
 // `base` is the repo subpath and the service-worker scope + manifest start_url/scope all
 // mirror it. (Switch to '/' + a CNAME only if it ever moves to a dedicated custom domain.)
 export default defineConfig({
