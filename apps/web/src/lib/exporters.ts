@@ -1,14 +1,9 @@
 // Export actions shared by the ExportButtons UI and the keyboard shortcuts, so both paths
-// behave identically. CSV is full-resolution from IndexedDB (§3.3); PNG snapshots the
-// chart canvas.
-import { storage } from '@mbtech-nl/multimeter-recorder';
-import { toCsv } from '@mbtech-nl/multimeter-protocol';
-import { downloadText, downloadBlob, slug } from '@mbtech-nl/multimeter-recorder';
+// behave identically. CSV is the recorder package's full-resolution export (from IndexedDB,
+// §3.3); PNG snapshots the chart canvas, which is app-only (uPlot).
+import { exportSessionCsv, downloadBlob, slug } from '@mbtech-nl/multimeter-recorder';
 
-export async function exportCsv(target: { id: string; name: string }): Promise<void> {
-  const readings = await storage.getReadings(target.id);
-  downloadText(toCsv(readings), `${slug(target.name)}.csv`);
-}
+export const exportCsv = exportSessionCsv;
 
 // Minimal handle so this stays in lib without importing a component type.
 export interface PngSource {

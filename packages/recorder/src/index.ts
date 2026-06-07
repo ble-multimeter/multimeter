@@ -7,5 +7,10 @@
 export * as storage from './storage';
 export { downloadText, downloadBlob, slug } from './download';
 export { RecorderSession, type RecState, type SegmentInfo, type RecorderSnapshot } from './session';
-export { SessionsStore, type OpenedSession, type SessionsSnapshot } from './sessions';
+export {
+  SessionsStore,
+  exportSessionCsv,
+  type OpenedSession,
+  type SessionsSnapshot,
+} from './sessions';
 export { PinRecorder, type PinSnapshot } from './pins';

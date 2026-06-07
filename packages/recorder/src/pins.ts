@@ -7,30 +7,9 @@
 // first pin auto-starts a session; stop() finalizes it; the next pin starts a fresh one.
 // Extracted from the React usePinSession hook.
 
-import { quantityKey, type Reading, type Session } from '@mbtech-nl/multimeter-protocol';
+import { deriveSegments, type Reading, type Session } from '@mbtech-nl/multimeter-protocol';
 import * as storage from './storage';
-
-const newId = (): string =>
-  typeof crypto !== 'undefined' && crypto.randomUUID
-    ? crypto.randomUUID()
-    : `p-${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
-
-// Session.segments from the captured readings (range changes stay one segment; a quantity
-// change starts the next) — the same rule csv re-derives, kept consistent here.
-function deriveSegments(readings: Reading[]): Session['segments'] {
-  const out: Session['segments'] = [];
-  let key: string | null = null;
-  let seg = -1;
-  for (const r of readings) {
-    const k = quantityKey(r);
-    if (k !== key) {
-      key = k;
-      seg++;
-      out.push({ seg, function: r.function, acdc: r.acdc, unit: r.baseUnit });
-    }
-  }
-  return out;
-}
+import { newId } from './ids';
 
 export interface PinSnapshot {
   active: boolean;
@@ -70,7 +49,7 @@ export class PinRecorder {
   pin = (r: Reading): void => {
     if (!this.session) {
       const session: Session = {
-        id: newId(),
+        id: newId('p'),
         name: `Pins ${new Date().toLocaleString()}`,
         startedAt: Date.now(),
         endedAt: null,

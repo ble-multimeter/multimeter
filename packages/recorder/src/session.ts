@@ -19,6 +19,7 @@ import {
   type Stats,
 } from '@mbtech-nl/multimeter-protocol';
 import * as storage from './storage';
+import { newId } from './ids';
 
 // Cap the in-memory current-segment buffer so an idle multi-hour session can't grow without
 // bound. Full resolution still goes to IndexedDB while recording, so nothing the user chose to
@@ -45,11 +46,6 @@ export interface RecorderSnapshot {
   recCount: number; // samples persisted in the active recording
   csvTarget: { id: string; name: string } | null; // active or most-recent recording
 }
-
-const newId = (): string =>
-  typeof crypto !== 'undefined' && crypto.randomUUID
-    ? crypto.randomUUID()
-    : `s-${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
 
 export class RecorderSession {
   private listeners = new Set<() => void>();

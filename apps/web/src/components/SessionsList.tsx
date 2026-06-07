@@ -5,41 +5,17 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import type { Reading, Sample, Session } from '@mbtech-nl/multimeter-protocol';
-import { quantityKey, toSample } from '@mbtech-nl/multimeter-protocol';
-import { computeStats } from '@mbtech-nl/multimeter-protocol';
+import type { Session } from '@mbtech-nl/multimeter-protocol';
+import { computeStats, splitSegments } from '@mbtech-nl/multimeter-protocol';
 import type { Sessions } from '@mbtech-nl/multimeter-react';
 import { LiveChart, type LiveChartHandle } from './LiveChart';
-import type { SegmentInfo } from '@mbtech-nl/multimeter-react';
 import { StatsPanel } from './StatsPanel';
 import { ExportButtons } from './ExportButtons';
 import { ConfirmDialog, PromptDialog } from './Dialog';
 
-// Split stored readings into contiguous same-quantity segments (PLAN §3.4) — the same
-// rule decode/csv use, applied here so a multi-mode recording is browsable per segment.
-interface Segment {
-  info: SegmentInfo;
-  samples: Sample[];
-}
-
-function splitSegments(readings: Reading[]): Segment[] {
-  const out: Segment[] = [];
-  let key: string | null = null;
-  let seg = -1;
-  for (const r of readings) {
-    const k = quantityKey(r);
-    if (k !== key) {
-      key = k;
-      seg++;
-      out.push({
-        info: { seg, function: r.function, acdc: r.acdc, unit: r.baseUnit },
-        samples: [],
-      });
-    }
-    out[out.length - 1].samples.push(toSample(r, seg));
-  }
-  return out;
-}
+// The read-only viewer groups a recording's readings into contiguous same-quantity segments
+// (PLAN §3.4) via the shared splitSegments (protocol), so a multi-mode recording is browsable
+// per segment with the exact same rule the CSV export uses.
 
 function fmtTime(ms: number): string {
   return new Date(ms).toLocaleString();

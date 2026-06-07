@@ -65,12 +65,17 @@ export class SessionsStore {
 
   // Re-export from the durable full-resolution store — not the decimated chart (§3.3).
   exportCsv = (session: Session): void => {
-    void storage.getReadings(session.id).then((readings) => {
-      downloadText(toCsv(readings), `${slug(session.name)}.csv`);
-    });
+    void exportSessionCsv(session);
   };
 
   dispose = (): void => {
     this.listeners.clear();
   };
+}
+
+// Standalone CSV export for a recording (by id + name) — full-resolution from IndexedDB.
+// Shared by SessionsStore.exportCsv and the app's export shortcut (which has no Session object).
+export async function exportSessionCsv(target: { id: string; name: string }): Promise<void> {
+  const readings = await storage.getReadings(target.id);
+  downloadText(toCsv(readings), `${slug(target.name)}.csv`);
 }

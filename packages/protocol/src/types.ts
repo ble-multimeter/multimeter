@@ -51,7 +51,7 @@ export function quantityKey(r: Reading): string {
 }
 
 // Persisted recording metadata. The full per-sample Readings live in a separate store
-// (see lib/storage.ts); this is the lightweight index row.
+// (the recorder package's storage); this is the lightweight index row.
 export interface Session {
   id: string;
   name: string;
