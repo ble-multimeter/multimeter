@@ -5,9 +5,5 @@ package-lock.json
 pnpm-lock.yaml
 assets
 public
-# process/planning docs (kept on disk, not in the repo, not format-enforced)
-PLAN.md
-HANDOFF.md
-PROTOCOL.md
-progress.md
-PUBLISHING.md
+# Markdown is not format-enforced (and process/planning docs below are not committed at all).
+*.md
