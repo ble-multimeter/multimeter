@@ -260,17 +260,18 @@ export default function App() {
                       onStop={recorder.stop}
                     />
                     <ExportButtons chartRef={chartRef} csvTarget={recorder.csvTarget} />
-                    <PinSession state={pinSession} onPin={pinReading} canPin={displayReading !== null} />
+                    <PinSession
+                      state={pinSession}
+                      onPin={pinReading}
+                      canPin={displayReading !== null}
+                    />
                   </div>
                 ) : (
                   <Placeholder meter={meter} />
                 )
               }
             />
-            <Route
-              path="/recordings"
-              element={<SessionsList sessions={sessions} />}
-            />
+            <Route path="/recordings" element={<SessionsList sessions={sessions} />} />
             <Route
               path="/recordings/:id"
               element={<SessionViewer sessions={sessions} dark={dark} strokeColor={chartStroke} />}
@@ -347,7 +348,10 @@ function ChartSkeleton() {
 
 function Loading({ label }: { label: string }) {
   return (
-    <div className="flex flex-1 items-center justify-center py-16 text-sm text-zinc-500" role="status">
+    <div
+      className="flex flex-1 items-center justify-center py-16 text-sm text-zinc-500"
+      role="status"
+    >
       {label}
     </div>
   );

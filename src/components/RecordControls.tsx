@@ -32,7 +32,10 @@ export function RecordControls({ recState, recCount, onRecord, onPause, onResume
             aria-label="Session name"
             className="min-w-0 flex-1 rounded-md border border-zinc-700 bg-zinc-950 px-3 py-1.5 text-sm text-zinc-100 placeholder:text-zinc-500 focus:border-zinc-500"
           />
-          <button onClick={() => onRecord(name)} className={`${btn} bg-red-500 text-white hover:bg-red-400`}>
+          <button
+            onClick={() => onRecord(name)}
+            className={`${btn} bg-red-500 text-white hover:bg-red-400`}
+          >
             ● Record
           </button>
         </>
@@ -53,11 +56,17 @@ export function RecordControls({ recState, recCount, onRecord, onPause, onResume
 
           <div className="ml-auto flex gap-2">
             {recState === 'recording' ? (
-              <button onClick={onPause} className={`${btn} border border-zinc-700 text-zinc-200 hover:bg-zinc-800`}>
+              <button
+                onClick={onPause}
+                className={`${btn} border border-zinc-700 text-zinc-200 hover:bg-zinc-800`}
+              >
                 Pause
               </button>
             ) : (
-              <button onClick={onResume} className={`${btn} bg-emerald-500 text-emerald-950 hover:bg-emerald-400`}>
+              <button
+                onClick={onResume}
+                className={`${btn} bg-emerald-500 text-emerald-950 hover:bg-emerald-400`}
+              >
                 Resume
               </button>
             )}

@@ -57,9 +57,7 @@ export function useSessions(): Sessions {
   const rename = useCallback(
     (id: string, name: string) => {
       void storage.renameSession(id, name).then(() => {
-        setOpened((o) =>
-          o?.session.id === id ? { ...o, session: { ...o.session, name } } : o,
-        );
+        setOpened((o) => (o?.session.id === id ? { ...o, session: { ...o.session, name } } : o));
         refresh();
       });
     },

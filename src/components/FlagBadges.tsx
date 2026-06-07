@@ -2,7 +2,13 @@
 // modes; low-battery and HV-warning render as prominent alerts (PLAN §3.2).
 import type { Reading } from '../ble/types';
 
-function Badge({ children, tone = 'quiet' }: { children: React.ReactNode; tone?: 'quiet' | 'alert' }) {
+function Badge({
+  children,
+  tone = 'quiet',
+}: {
+  children: React.ReactNode;
+  tone?: 'quiet' | 'alert';
+}) {
   const cls =
     tone === 'alert'
       ? 'bg-red-500/20 text-red-700 ring-1 ring-red-500/40 dark:text-red-300'

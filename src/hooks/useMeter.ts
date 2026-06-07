@@ -52,7 +52,10 @@ export function useMeter(): Meter {
     setDeviceName('UT60BT (demo)');
     setState('live');
     const start = Date.now();
-    const id = setInterval(() => setReading(demoReading((Date.now() - start) / 1000, Date.now())), 250);
+    const id = setInterval(
+      () => setReading(demoReading((Date.now() - start) / 1000, Date.now())),
+      250,
+    );
     return () => clearInterval(id);
   }, []);
 

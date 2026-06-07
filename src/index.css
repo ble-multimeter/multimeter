@@ -1,4 +1,4 @@
-@import "tailwindcss";
+@import 'tailwindcss';
 
 /* Manual (class-based) dark mode: the app toggles `.dark` on <html>. This variant lets a
    handful of accent spots opt into theme-specific shades where the neutral remap below

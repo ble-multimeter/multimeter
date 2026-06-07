@@ -95,7 +95,9 @@ export function PinSession({
               key={i}
               className="flex items-center gap-3 rounded-md bg-zinc-900 px-2.5 py-1.5 text-sm"
             >
-              <span className="w-6 shrink-0 text-right font-mono text-xs text-zinc-500">{i + 1}</span>
+              <span className="w-6 shrink-0 text-right font-mono text-xs text-zinc-500">
+                {i + 1}
+              </span>
               <span className="shrink-0 font-mono tabular-nums text-zinc-100">
                 {r.overload ? 'OL' : r.displayText || '—'}
                 {r.displayUnit && <span className="ml-1 text-zinc-400">{r.displayUnit}</span>}

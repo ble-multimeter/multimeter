@@ -2,8 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { decimate } from './decimate';
 import type { Sample } from '../ble/types';
 
-const mk = (vals: (number | null)[]): Sample[] =>
-  vals.map((v, i) => ({ t: i, v, seg: 0 }));
+const mk = (vals: (number | null)[]): Sample[] => vals.map((v, i) => ({ t: i, v, seg: 0 }));
 
 describe('decimate', () => {
   it('returns the series untouched when already under the cap', () => {

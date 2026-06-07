@@ -143,7 +143,9 @@ export const LiveChart = forwardRef<LiveChartHandle, Props>(function LiveChart(
   }));
 
   const unit = segment?.unit ? ` (${segment.unit})` : '';
-  const label = segment ? `${segment.function}${segment.acdc ? ' ' + segment.acdc : ''}${unit}` : '—';
+  const label = segment
+    ? `${segment.function}${segment.acdc ? ' ' + segment.acdc : ''}${unit}`
+    : '—';
 
   return (
     <div className="flex flex-col gap-2">
@@ -173,7 +175,12 @@ export const LiveChart = forwardRef<LiveChartHandle, Props>(function LiveChart(
           ))}
         </div>
       </div>
-      <div ref={hostRef} className="w-full" role="img" aria-label={`Time-series chart of ${label}`} />
+      <div
+        ref={hostRef}
+        className="w-full"
+        role="img"
+        aria-label={`Time-series chart of ${label}`}
+      />
     </div>
   );
 });

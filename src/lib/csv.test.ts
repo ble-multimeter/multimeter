@@ -3,8 +3,15 @@ import { toCsv } from './csv';
 import type { Reading } from '../ble/types';
 
 const noFlags = {
-  max: false, min: false, hold: false, rel: false, auto: false,
-  lowBattery: false, hvWarning: false, peakMax: false, peakMin: false,
+  max: false,
+  min: false,
+  hold: false,
+  rel: false,
+  auto: false,
+  lowBattery: false,
+  hvWarning: false,
+  peakMax: false,
+  peakMin: false,
 };
 
 function reading(over: Partial<Reading> = {}): Reading {
@@ -39,7 +46,12 @@ describe('toCsv', () => {
 
   it('serializes booleans as 0/1 and nulls as empty', () => {
     const csv = toCsv([
-      reading({ displayValue: null, baseValue: null, overload: true, flags: { ...noFlags, hold: true } }),
+      reading({
+        displayValue: null,
+        baseValue: null,
+        overload: true,
+        flags: { ...noFlags, hold: true },
+      }),
     ]);
     const row = csv.split('\r\n')[1];
     // …displayValue(empty), displayUnit, baseValue(empty)…
@@ -55,7 +67,10 @@ describe('toCsv', () => {
       reading({ function: 'DCV', acdc: 'DC' }), // mode change → seg++
       reading({ function: 'ACV', acdc: 'AC' }), // AC/DC flip → seg++
     ]);
-    const segs = csv.split('\r\n').slice(1).map((r) => r.split(',')[1]);
+    const segs = csv
+      .split('\r\n')
+      .slice(1)
+      .map((r) => r.split(',')[1]);
     expect(segs).toEqual(['0', '0', '1', '2']);
   });
 

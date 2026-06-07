@@ -145,13 +145,9 @@ export function useRecorder(reading: Reading | null): Recorder {
 
   // Live stats over the current window (segment start, or last resetStats). Cheap at a
   // few Hz; recomputing on each new sample keeps min/max/avg live.
-  const windowed = useMemo(
-    () => samples.filter((s) => s.t >= statsStartT),
-    [samples, statsStartT],
-  );
+  const windowed = useMemo(() => samples.filter((s) => s.t >= statsStartT), [samples, statsStartT]);
   const stats = useMemo(() => computeStats(windowed.map((s) => s.v)), [windowed]);
-  const statsDurationMs =
-    windowed.length > 1 ? windowed[windowed.length - 1].t - windowed[0].t : 0;
+  const statsDurationMs = windowed.length > 1 ? windowed[windowed.length - 1].t - windowed[0].t : 0;
 
   const resetStats = useCallback(() => {
     const lastT = samples.length ? samples[samples.length - 1].t : 0;

@@ -3,7 +3,13 @@
 import { describe, it, expect } from 'vitest';
 import { FrameParser, checksumOk } from './protocol';
 
-const hex = (s: string) => Uint8Array.from(s.trim().split(/\s+/).map((h) => parseInt(h, 16)));
+const hex = (s: string) =>
+  Uint8Array.from(
+    s
+      .trim()
+      .split(/\s+/)
+      .map((h) => parseInt(h, 16)),
+  );
 
 const DCV = hex('ab cd 10 02 30 20 2d 31 2e 33 32 35 00 00 00 00 00 03 00'); // 19 bytes
 const HZ = hex('ab cd 10 04 30 20 20 30 2e 30 30 30 00 00 00 00 08 02 f2'); // 19 bytes

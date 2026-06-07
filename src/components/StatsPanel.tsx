@@ -64,7 +64,10 @@ export function StatsPanel({ stats, unit, durationMs, onReset }: Props) {
         <Stat label="Average" value={fmt(stats.avg, unit)} />
         <Stat label="Peak-peak" value={fmt(stats.p2p, unit)} />
         <Stat label="Std dev" value={fmt(stats.stddev, unit)} />
-        <Stat label="Samples" value={`${stats.count}${stats.nullCount ? ` (+${stats.nullCount} OL)` : ''}`} />
+        <Stat
+          label="Samples"
+          value={`${stats.count}${stats.nullCount ? ` (+${stats.nullCount} OL)` : ''}`}
+        />
         <Stat label="Duration" value={dur(durationMs)} />
       </div>
     </div>

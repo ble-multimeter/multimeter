@@ -15,8 +15,15 @@ import {
 import type { Reading, Session } from '../ble/types';
 
 const noFlags = {
-  max: false, min: false, hold: false, rel: false, auto: false,
-  lowBattery: false, hvWarning: false, peakMax: false, peakMin: false,
+  max: false,
+  min: false,
+  hold: false,
+  rel: false,
+  auto: false,
+  lowBattery: false,
+  hvWarning: false,
+  peakMax: false,
+  peakMin: false,
 };
 
 const reading = (ts: number, v: number): Reading => ({
@@ -55,7 +62,7 @@ describe('storage', () => {
     expect(list.find((s) => s.id === 's1')).toBeDefined();
   });
 
-  it('keeps each session\'s samples isolated', async () => {
+  it("keeps each session's samples isolated", async () => {
     await createSession(session('a'));
     await createSession(session('b'));
     await appendSamples('a', 0, [reading(1, 1)]);

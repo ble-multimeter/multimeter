@@ -62,8 +62,8 @@ export function SessionsList({ sessions }: { sessions: Sessions }) {
       <h2 className="mb-3 text-lg font-semibold text-zinc-100">Recordings</h2>
       {list.length === 0 ? (
         <p className="text-sm text-zinc-500">
-          No recordings yet. Connect, hit ● Record on the live screen, and your sessions show up here —
-          they survive a reload.
+          No recordings yet. Connect, hit ● Record on the live screen, and your sessions show up
+          here — they survive a reload.
         </p>
       ) : (
         <ul className="flex flex-col gap-2">
@@ -105,11 +105,7 @@ export function SessionsList({ sessions }: { sessions: Sessions }) {
       <ConfirmDialog
         open={deleting !== null}
         title="Delete recording"
-        message={
-          <>
-            Delete “{deleting?.name}”? This can’t be undone.
-          </>
-        }
+        message={<>Delete “{deleting?.name}”? This can’t be undone.</>}
         onConfirm={() => deleting && remove(deleting.id)}
         onClose={() => setDeleting(null)}
       />
@@ -138,10 +134,7 @@ export function SessionViewer({
   }, [id, opened, open]);
 
   const chartRef = useRef<LiveChartHandle>(null);
-  const segments = useMemo(
-    () => (ready ? splitSegments(opened!.readings) : []),
-    [ready, opened],
-  );
+  const segments = useMemo(() => (ready ? splitSegments(opened!.readings) : []), [ready, opened]);
   const [segIdx, setSegIdx] = useState(0);
   useEffect(() => setSegIdx(0), [id]); // reset to first segment when switching sessions
   const seg = segments[segIdx];
@@ -167,13 +160,14 @@ export function SessionViewer({
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 px-4 py-4">
       <div className="flex flex-wrap items-center gap-3">
         <Btn onClick={() => navigate('/recordings')}>← Back</Btn>
-        <h2 className="min-w-0 flex-1 truncate text-lg font-semibold text-zinc-100">{session.name}</h2>
+        <h2 className="min-w-0 flex-1 truncate text-lg font-semibold text-zinc-100">
+          {session.name}
+        </h2>
         <ExportButtons chartRef={chartRef} csvTarget={{ id: session.id, name: session.name }} />
       </div>
 
       {segments.length > 1 && (
         <div className="flex flex-wrap gap-1.5" role="group" aria-label="Recording segment">
-
           {segments.map((g, i) => (
             <button
               key={i}

@@ -63,9 +63,28 @@ export interface Session {
 
 // Index = frame[3] & 0x7F (PROTOCOL §3). '✓' codes were verified on our UT60BTk.
 export const FUNCTIONS = [
-  'ACV', 'ACmV', 'DCV', 'DCmV', 'Hz', '%', 'OHM', 'CONT', 'DIODE', 'CAP',
-  '°C', '°F', 'DCuA', 'ACuA', 'DCmA', 'ACmA', 'DCA', 'ACA', 'HFE', 'Live',
-  'NCV', 'LozV',
+  'ACV',
+  'ACmV',
+  'DCV',
+  'DCmV',
+  'Hz',
+  '%',
+  'OHM',
+  'CONT',
+  'DIODE',
+  'CAP',
+  '°C',
+  '°F',
+  'DCuA',
+  'ACuA',
+  'DCmA',
+  'ACmA',
+  'DCA',
+  'ACA',
+  'HFE',
+  'Live',
+  'NCV',
+  'LozV',
 ] as const;
 
 // Range digit (frame[4] − 0x30) selects the displayed unit *and* metric prefix.
@@ -100,7 +119,17 @@ export const RANGE_UNITS: Record<string, string[]> = {
 // Functions where the AC/DC distinction is meaningful — these report acdc from
 // flags C bit3. Everything else (Hz, OHM, CAP, temp, NCV…) reports ''.
 export const ACDC_FUNCTIONS = new Set([
-  'ACV', 'DCV', 'LozV', 'ACmV', 'DCmV', 'DCuA', 'ACuA', 'DCmA', 'ACmA', 'DCA', 'ACA',
+  'ACV',
+  'DCV',
+  'LozV',
+  'ACmV',
+  'DCmV',
+  'DCuA',
+  'ACuA',
+  'DCmA',
+  'ACmA',
+  'DCA',
+  'ACA',
 ]);
 
 const PREFIX: Record<string, number> = { n: -9, µ: -6, m: -3, k: 3, M: 6 };
