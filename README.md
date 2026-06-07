@@ -15,8 +15,9 @@ no install, no account, no data leaves your machine — and installs as an offli
 ## Features
 
 - **Live readout** — a big, glanceable hero value with function, AC/DC, and range badges.
-- **Charting** — a rolling live chart (uPlot) with Fit-all / 1m / 5m / 30m windows; range
-  changes (kΩ↔MΩ) stay continuous because values are normalized to SI.
+- **Charting** — a rolling live chart (uPlot) with Fit-all / 1m / 5m / 30m windows and a
+  pick of five line colors; range changes (kΩ↔MΩ) stay continuous because values are
+  normalized to SI.
 - **Statistics** — current, min, max, average, peak-to-peak, std-dev, sample count, duration.
 - **Recording** — capture sessions to IndexedDB; they survive a reload. Pause / resume / stop.
 - **Export** — download any session as **CSV**, or the chart as a **PNG**.
@@ -45,6 +46,15 @@ no install, no account, no data leaves your machine — and installs as an offli
   <img src="assets/session-dark.png" alt="A recorded session" width="49%">
 </p>
 
+**Light theme too** — toggle with one tap (or the `t` key); line color is a preset as well
+(violet and sky shown here):
+
+<p align="center">
+  <img src="assets/live-light.png" alt="Live readout, light theme" width="62%">
+  &nbsp;&nbsp;
+  <img src="assets/mobile-light.png" alt="Mobile, light theme" width="24%">
+</p>
+
 ## Requirements
 
 Web Bluetooth is required, which means a **Chromium-based browser** in a secure context
@@ -70,7 +80,8 @@ npm test         # unit tests (vitest)
 
 > **No meter handy?** Append `?demo` to the URL (e.g. `localhost:5173/multimeter/?demo`)
 > to drive the whole UI from a synthetic measurement stream — handy for development and the
-> screenshots above.
+> screenshots above. Demo mode needs no Bluetooth, so it runs in any browser (Firefox and
+> Safari included).
 
 ## Keyboard shortcuts
 
