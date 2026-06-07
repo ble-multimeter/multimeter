@@ -14,7 +14,11 @@ export function useRecorder(reading: MaybeRefOrGetter<Reading | null>) {
     snap.value = rec.getSnapshot();
   });
 
-  watch(() => toValue(reading), (r) => rec.push(r), { immediate: true, flush: 'sync' });
+  watch(
+    () => toValue(reading),
+    (r) => rec.push(r),
+    { immediate: true, flush: 'sync' },
+  );
 
   onScopeDispose(() => {
     unsub();

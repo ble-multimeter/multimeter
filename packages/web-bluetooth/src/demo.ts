@@ -3,7 +3,12 @@
 // skips Web Bluetooth entirely and feeds these Readings on a timer. Pure + side-effect-free
 // here; the timer lives in the hook. Not part of the normal connect path.
 
-import { ACDC_FUNCTIONS, RANGE_UNITS, unitInfo, type Reading } from '@mbtech-nl/multimeter-protocol';
+import {
+  ACDC_FUNCTIONS,
+  RANGE_UNITS,
+  unitInfo,
+  type Reading,
+} from '@mbtech-nl/multimeter-protocol';
 
 export function isDemoMode(): boolean {
   return typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('demo');

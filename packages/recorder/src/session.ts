@@ -89,8 +89,7 @@ export class RecorderSession {
   private build(): RecorderSnapshot {
     const window = this.samples.filter((s) => s.t >= this.statsStartT);
     const stats = computeStats(window.map((s) => s.v));
-    const statsDurationMs =
-      window.length > 1 ? window[window.length - 1].t - window[0].t : 0;
+    const statsDurationMs = window.length > 1 ? window[window.length - 1].t - window[0].t : 0;
     return {
       samples: this.samples,
       truncated: this.truncated,

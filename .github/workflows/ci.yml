@@ -1,7 +1,7 @@
 name: CI
 
-# Typecheck, lint, format-check and tests (with coverage) on every push to main and on PRs.
-# Coverage is uploaded to Codecov.
+# Typecheck, lint, format-check and tests (with coverage) across the pnpm workspace on every
+# push to main and on PRs. Coverage is uploaded to Codecov.
 on:
   push:
     branches: [main]
@@ -15,15 +15,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
       - uses: actions/setup-node@v6
         with:
           node-version: 22
-          cache: npm
-      - run: npm ci
-      - run: npm run typecheck
-      - run: npm run lint
-      - run: npm run format:check
-      - run: npm run coverage
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm lint
+      - run: pnpm format:check
+      - run: pnpm coverage
       - uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}

@@ -1,6 +1,6 @@
 name: Deploy to GitHub Pages
 
-# Build the Vite app and publish dist/ to GitHub Pages on every push to main.
+# Build the Vite app (apps/web) and publish its dist/ to GitHub Pages on every push to main.
 # Pages must be set to "GitHub Actions" as its source (Settings → Pages → Build and
 # deployment → Source). Served as a project site at mbtech-nl.github.io/multimeter/, so the
 # repo must be named `multimeter` (Vite `base` is /multimeter/ to match).
@@ -25,15 +25,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
       - uses: actions/setup-node@v6
         with:
           node-version: 22
-          cache: npm
-      - run: npm ci
-      - run: npm run build
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter web build
       - uses: actions/upload-pages-artifact@v5
         with:
-          path: dist
+          path: apps/web/dist
 
   deploy:
     needs: build
