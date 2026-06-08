@@ -42,6 +42,10 @@ export interface MeterSnapshot {
 const errMsg = (e: unknown) => (e instanceof Error ? `${e.name}: ${e.message}` : String(e));
 const DEMO_INTERVAL_MS = 250; // the meter's ~4 Hz
 const SNIFF_TIMEOUT_MS = 4000; // give up identifying a shared-service meter after this
+// The ISSC "Transparent UART" service shared by the UNI-T handheld family (UT60BT/161/171/181A/
+// 117C/219P). Members can't be frame-sniffed (no data before a model-specific handshake) so they're
+// routed by advertised name; other shared-service families (0xFFF0) are sniffed instead.
+const ISSC_SERVICE = '49535343-fe7d-4ae5-8fa9-9fafd205e455';
 
 export class MeterSession {
   readonly isDemo = isDemoMode();
@@ -175,13 +179,22 @@ export class MeterSession {
       const id = await t.requestAndConnect();
       const matched = driverById(id) ?? drivers[0]!;
       const candidates = driversForService(matched.gatt.service);
-      if (candidates.length > 1) {
+      // The ISSC family (UT60BT/UT161/UT171/UT181A/UT117C/UT219P) shares one GATT service but each
+      // model needs a different handshake before it emits ANY frame — so it can't be sniffed.
+      // Route it by advertised name instead (names are unique across the family). The 0xFFF0
+      // families free-stream, so they stay on frame-sniffing.
+      const name = t.deviceName ?? '';
+      const byName =
+        candidates.length > 1 && matched.gatt.service === ISSC_SERVICE && name
+          ? candidates.find(d => d.match({ name }))
+          : undefined;
+      if (candidates.length > 1 && !byName) {
         // Several meter families share this GATT service (0xFFF0). The transport can't tell them
         // apart by service alone, so identify by the shape of the first frame.
         this.set({ deviceName: t.deviceName ?? 'Multimeter' });
         await this.sniffDriverForService(candidates);
       } else {
-        this.driver = matched;
+        this.driver = byName ?? matched;
         this.framer = this.driver.createFramer();
         this.set({ deviceName: t.deviceName ?? this.driver.label, controls: this.controlNames() });
         await this.handshake();

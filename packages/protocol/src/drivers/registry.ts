@@ -4,16 +4,34 @@
 
 import type { Driver, DriverMatchContext } from './types';
 import { uniT } from './uni-t';
+import { ut171 } from './ut171';
+import { ut181a } from './ut181a';
+import { ut117c } from './ut117c';
+import { ut219p } from './ut219p';
 import { bdm } from './bdm';
 import { owonPlus } from './owon-plus';
 import { owonOld } from './owon-old';
 import { voltcraft } from './voltcraft';
 import { aiCare } from './ai-care';
 
-// uni-t (FE7D) and ai-care (FFB0) own their service → unambiguous. bdm/owon-plus/owon-old/
-// voltcraft all share 0xFFF0 and are told apart by frame-sniffing (`Driver.sniff`); the session
-// resolves that collision once the first frame arrives. See drivers/types.ts `sniff`.
-export const drivers: Driver[] = [uniT, bdm, owonPlus, owonOld, voltcraft, aiCare];
+// Two shared-service families, disambiguated differently:
+//   * ISSC (FE7D): uni-t (UT60BT/UT161), ut171, ut181a, ut117c, ut219p. These meters emit NO
+//     frame until a model-specific handshake, so they can't be sniffed — the session routes them
+//     by advertised name (each driver's match is name-only; see realConnect).
+//   * 0xFFF0: bdm/owon-plus/owon-old/voltcraft free-stream, so they're told apart by frame-sniffing
+//     (`Driver.sniff`) once the first frame arrives. ai-care (FFB0) owns its service outright.
+export const drivers: Driver[] = [
+  uniT,
+  ut171,
+  ut181a,
+  ut117c,
+  ut219p,
+  bdm,
+  owonPlus,
+  owonOld,
+  voltcraft,
+  aiCare,
+];
 
 /** Every distinct GATT service UUID, for requestDevice `optionalServices`. */
 export function allServices(): string[] {

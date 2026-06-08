@@ -40,27 +40,29 @@ describe('FFF0 driver disambiguation', () => {
     }
   });
 
-  it('uni-t and ai-care own their service (no sniffing needed)', () => {
-    const uniT = driverById('uni-t')!;
+  it('ai-care owns its FFB0 service alone (no sniffing needed)', () => {
     const aiCare = driverById('ai-care')!;
-    expect(driversForService(uniT.gatt.service)).toHaveLength(1);
-    expect(driversForService(aiCare.gatt.service)).toHaveLength(1);
-    // ...and they don't claim each other's / the FFF0 frames even if asked to sniff.
-    expect(uniT.sniff).toBeUndefined();
+    expect(driversForService(aiCare.gatt.service)).toEqual([aiCare]);
     expect(aiCare.sniff).toBeUndefined();
+    // The ISSC family (FE7D) also shares a service but is name-routed, not sniffed — see the
+    // registry/session. This block only governs the 0xFFF0 free-streaming families.
   });
 
   it('every FFF0 driver exposes a sniffer (required to disambiguate)', () => {
     for (const d of candidates) expect(typeof d.sniff).toBe('function');
   });
 
-  it('the registry holds all six drivers', () => {
+  it('the registry holds all ten drivers', () => {
     expect(drivers.map(d => d.id).sort()).toEqual([
       'ai-care',
       'bdm',
       'owon-old',
       'owon-plus',
       'uni-t',
+      'ut117c',
+      'ut171',
+      'ut181a',
+      'ut219p',
       'voltcraft',
     ]);
   });

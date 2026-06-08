@@ -77,8 +77,14 @@ describe('driversForService', () => {
     expect(driversForService(FFF0)).toHaveLength(4);
   });
 
-  it('returns exactly one driver for the unambiguous services', () => {
-    expect(driversForService(FE7D)).toHaveLength(1);
+  it('returns the whole ISSC family on FE7D (name-routed) and one driver on FFB0', () => {
+    expect(driversForService(FE7D).map(d => d.id)).toEqual([
+      'uni-t',
+      'ut171',
+      'ut181a',
+      'ut117c',
+      'ut219p',
+    ]);
     expect(driversForService(FFB0)).toHaveLength(1);
   });
 
@@ -114,9 +120,13 @@ describe('sniffDriver', () => {
 });
 
 describe('drivers array', () => {
-  it('registers the six known drivers in order', () => {
+  it('registers all ten known drivers in order (ISSC family first, then 0xFFF0, then FFB0)', () => {
     expect(drivers.map(d => d.id)).toEqual([
       'uni-t',
+      'ut171',
+      'ut181a',
+      'ut117c',
+      'ut219p',
       'bdm',
       'owon-plus',
       'owon-old',
