@@ -17,6 +17,7 @@ import { resolveStroke } from './lib/chartColors';
 import { ConnectionStatus, DeviceMenu, connectionAction } from './components/ConnectionChip';
 import { HeroReadout } from './components/HeroReadout';
 import { CopyButton } from './components/CopyButton';
+import { MeterControls } from './components/MeterControls';
 import type { LiveChartHandle } from './components/LiveChart';
 import { StatsPanel } from './components/StatsPanel';
 import { RecordControls } from './components/RecordControls';
@@ -235,6 +236,9 @@ export default function App() {
                         </button>
                       )}
                     </div>
+                    {meter.state === 'live' && (
+                      <MeterControls controls={meter.controls} onPress={meter.sendControl} />
+                    )}
                     <Suspense fallback={<ChartSkeleton />}>
                       <LiveChart
                         ref={chartRef}
