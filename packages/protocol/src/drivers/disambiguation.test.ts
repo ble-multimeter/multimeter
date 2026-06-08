@@ -52,7 +52,7 @@ describe('FFF0 driver disambiguation', () => {
     for (const d of candidates) expect(typeof d.sniff).toBe('function');
   });
 
-  it('the registry holds all ten drivers', () => {
+  it('the registry holds all eleven drivers', () => {
     expect(drivers.map(d => d.id).sort()).toEqual([
       'ai-care',
       'bdm',
@@ -62,6 +62,7 @@ describe('FFF0 driver disambiguation', () => {
       'ut117c',
       'ut171',
       'ut181a',
+      'ut202bt',
       'ut219p',
       'voltcraft',
     ]);

@@ -84,6 +84,7 @@ describe('driversForService', () => {
       'ut181a',
       'ut117c',
       'ut219p',
+      'ut202bt',
     ]);
     expect(driversForService(FFB0)).toHaveLength(1);
   });
@@ -120,13 +121,14 @@ describe('sniffDriver', () => {
 });
 
 describe('drivers array', () => {
-  it('registers all ten known drivers in order (ISSC family first, then 0xFFF0, then FFB0)', () => {
+  it('registers all eleven known drivers in order (ISSC family first, then 0xFFF0, then FFB0)', () => {
     expect(drivers.map(d => d.id)).toEqual([
       'uni-t',
       'ut171',
       'ut181a',
       'ut117c',
       'ut219p',
+      'ut202bt',
       'bdm',
       'owon-plus',
       'owon-old',
