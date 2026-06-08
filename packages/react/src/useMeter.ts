@@ -5,19 +5,21 @@
 
 import { useEffect, useRef, useSyncExternalStore } from 'react';
 import { MeterSession, type MeterState } from '@ble-multimeter/web-bluetooth';
-import type { Reading } from '@ble-multimeter/protocol';
+import type { MeterControl, Reading } from '@ble-multimeter/protocol';
 
-export type { MeterState };
+export type { MeterState, MeterControl };
 
 export interface Meter {
   state: MeterState;
   reading: Reading | null;
   deviceName: string | null;
   error: string | null;
+  controls: MeterControl[]; // front-panel controls the connected meter exposes
   connect: () => void;
   reconnect: () => void;
   disconnect: () => void;
   toggleBacklight: () => void;
+  sendControl: (name: MeterControl) => void; // press a soft button (HOLD, RANGE, SELECT, …)
 }
 
 export function useMeter(): Meter {
@@ -39,5 +41,6 @@ export function useMeter(): Meter {
     reconnect: session.reconnect,
     disconnect: session.disconnect,
     toggleBacklight: session.toggleBacklight,
+    sendControl: session.sendControl,
   };
 }

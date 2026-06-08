@@ -3,9 +3,9 @@
 
 import { computed, shallowRef, onScopeDispose } from 'vue';
 import { MeterSession, type MeterState } from '@ble-multimeter/web-bluetooth';
-import type { Reading } from '@ble-multimeter/protocol';
+import type { MeterControl, Reading } from '@ble-multimeter/protocol';
 
-export type { MeterState };
+export type { MeterState, MeterControl };
 
 export function useMeter() {
   const session = new MeterSession();
@@ -27,9 +27,11 @@ export function useMeter() {
     reading: computed<Reading | null>(() => snap.value.reading),
     deviceName: computed(() => snap.value.deviceName),
     error: computed(() => snap.value.error),
+    controls: computed<MeterControl[]>(() => snap.value.controls),
     connect: session.connect,
     reconnect: session.reconnect,
     disconnect: session.disconnect,
     toggleBacklight: session.toggleBacklight,
+    sendControl: session.sendControl,
   };
 }

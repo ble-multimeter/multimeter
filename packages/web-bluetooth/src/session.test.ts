@@ -457,6 +457,56 @@ describe('MeterSession — toggleBacklight', () => {
   });
 });
 
+describe('MeterSession — sendControl', () => {
+  // command byte (frame[3]) per named control, per the uni-t driver
+  const CODES: Record<string, number> = {
+    backlight: 0x4b,
+    hold: 0x4a,
+    rel: 0x48,
+    select: 0x4c,
+    range: 0x46,
+    rangeAuto: 0x47,
+    hzDuty: 0x49,
+    maxMin: 0x41,
+  };
+
+  it('exposes the uni-t control set in the snapshot once live', async () => {
+    installMeter();
+    const s = new MeterSession();
+    s.connect();
+    await vi.waitFor(() => expect(s.getSnapshot().state).toBe('live'));
+    expect(s.getSnapshot().controls.sort()).toEqual(Object.keys(CODES).sort());
+  });
+
+  it.each(Object.entries(CODES))('writes the %s command frame', async (name, code) => {
+    const { write } = installMeter();
+    const s = new MeterSession();
+    s.connect();
+    await vi.waitFor(() => expect(s.getSnapshot().state).toBe('live'));
+
+    write.writeValueWithoutResponse.mockClear();
+    s.sendControl(name as Parameters<MeterSession['sendControl']>[0]);
+    await vi.waitFor(() =>
+      expect(write.writeValueWithoutResponse.mock.calls.map(c => c[0][3] as number)).toContain(
+        code,
+      ),
+    );
+  });
+
+  it('clears controls and is a no-op after disconnect', async () => {
+    const { write } = installMeter();
+    const s = new MeterSession();
+    s.connect();
+    await vi.waitFor(() => expect(s.getSnapshot().state).toBe('live'));
+
+    s.disconnect();
+    expect(s.getSnapshot().controls).toEqual([]);
+    write.writeValueWithoutResponse.mockClear();
+    expect(() => s.sendControl('hold')).not.toThrow();
+    expect(write.writeValueWithoutResponse).not.toHaveBeenCalled();
+  });
+});
+
 describe('MeterSession — external store', () => {
   it('static supported mirrors Transport.supported', () => {
     installMeter();

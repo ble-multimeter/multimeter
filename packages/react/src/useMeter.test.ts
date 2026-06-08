@@ -104,6 +104,8 @@ describe('useMeter', () => {
     expect(typeof result.current.disconnect).toBe('function');
     expect(typeof result.current.reconnect).toBe('function');
     expect(typeof result.current.toggleBacklight).toBe('function');
+    expect(typeof result.current.sendControl).toBe('function');
+    expect(result.current.controls).toEqual([]); // idle: no driver yet
 
     const before = result.current;
     rerender();
@@ -112,6 +114,7 @@ describe('useMeter', () => {
     expect(result.current.disconnect).toBe(before.disconnect);
     expect(result.current.reconnect).toBe(before.reconnect);
     expect(result.current.toggleBacklight).toBe(before.toggleBacklight);
+    expect(result.current.sendControl).toBe(before.sendControl);
   });
 
   it('re-renders with the engine snapshot through connect → live → disconnect', async () => {

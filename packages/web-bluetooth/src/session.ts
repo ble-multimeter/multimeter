@@ -16,6 +16,7 @@ import {
   type DriverFramer,
   type DriverIO,
   type FrameKind,
+  type MeterControl,
   type Reading,
 } from '@ble-multimeter/protocol';
 import { Transport } from './transport';
@@ -35,6 +36,7 @@ export interface MeterSnapshot {
   reading: Reading | null;
   deviceName: string | null;
   error: string | null;
+  controls: MeterControl[]; // front-panel controls the active driver exposes (empty when idle)
 }
 
 const errMsg = (e: unknown) => (e instanceof Error ? `${e.name}: ${e.message}` : String(e));
@@ -74,7 +76,12 @@ export class MeterSession {
   constructor() {
     // Demo never touches Bluetooth, so it must run even where Web Bluetooth is absent.
     const state: MeterState = this.isDemo || Transport.supported ? 'idle' : 'unsupported';
-    this.snap = { state, reading: null, deviceName: null, error: null };
+    this.snap = { state, reading: null, deviceName: null, error: null, controls: [] };
+  }
+
+  /** Control names the active driver exposes, for the snapshot (empty when no driver). */
+  private controlNames(): MeterControl[] {
+    return Object.keys(this.driver?.controls ?? {}) as MeterControl[];
   }
 
   static get supported(): boolean {
@@ -115,12 +122,16 @@ export class MeterSession {
     this.transport?.disconnect();
     this.transport = null;
     this.framer?.reset();
-    this.set({ reading: null, deviceName: null, error: null, state: 'idle' });
+    this.driver = null;
+    this.set({ reading: null, deviceName: null, error: null, state: 'idle', controls: [] });
   };
-  toggleBacklight = (): void => {
-    const cmd = this.driver?.controls?.backlight;
+  // Send a named front-panel control (HOLD, RANGE, SELECT, …) if the active driver maps it.
+  // No-op when disconnected or the driver doesn't expose that control.
+  sendControl = (name: MeterControl): void => {
+    const cmd = this.driver?.controls?.[name];
     if (cmd) void this.transport?.write(cmd);
   };
+  toggleBacklight = (): void => this.sendControl('backlight');
   /** Release timers/listeners (call from the binding's unmount cleanup). */
   dispose = (): void => {
     this.stopDemo();
@@ -133,7 +144,9 @@ export class MeterSession {
   // --- demo ---
   private startDemo(): void {
     if (this.demoTimer) return;
-    this.set({ deviceName: 'UT60BT (demo)', state: 'live' });
+    // Pretend to be a UT60BT so the demo surfaces its control set (writes are no-ops — no transport).
+    this.driver = driverById('uni-t') ?? null;
+    this.set({ deviceName: 'UT60BT (demo)', state: 'live', controls: this.controlNames() });
     const start = Date.now();
     this.demoTimer = setInterval(() => {
       const ts = Date.now();
@@ -170,7 +183,7 @@ export class MeterSession {
       } else {
         this.driver = matched;
         this.framer = this.driver.createFramer();
-        this.set({ deviceName: t.deviceName ?? this.driver.label });
+        this.set({ deviceName: t.deviceName ?? this.driver.label, controls: this.controlNames() });
         await this.handshake();
       }
     } catch (e) {
@@ -242,7 +255,10 @@ export class MeterSession {
     this.sniffing = null;
     this.driver = picked;
     this.framer = picked.createFramer();
-    this.set({ deviceName: this.transport?.deviceName ?? picked.label });
+    this.set({
+      deviceName: this.transport?.deviceName ?? picked.label,
+      controls: this.controlNames(),
+    });
     s.resolve();
     this.handleChunk(frame);
   }

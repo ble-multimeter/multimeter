@@ -3,13 +3,24 @@
 // coalesce, so we accumulate bytes, sync on AB CD, slice by the <len> byte, and
 // validate the trailing 16-bit checksum on measurement frames to detect/recover desync.
 
-// Fixed command frames `AB CD <len> <cmd> <param> <checksum>`. We only ever send these
-// three, so they're hardcoded (PROTOCOL §2). `new Uint8Array([...])` gives a
-// Uint8Array<ArrayBuffer>, which Web Bluetooth's writeValue* (BufferSource) accepts.
+// Fixed command frames `AB CD <len> <cmd> <param> <checksum>`, hardcoded (PROTOCOL §2).
+// `new Uint8Array([...])` gives a Uint8Array<ArrayBuffer>, which Web Bluetooth's writeValue*
+// (BufferSource) accepts. The trailing two bytes are a 16-bit big-endian checksum of the
+// preceding bytes: 0xAB + 0xCD + 0x03 + cmd (= cmd + 0x17B).
+//
+// The soft-button controls (0x41–0x4C block) were reverse-engineered from the UNI-T Smart
+// Measure Android app (`Anjianview2` → `BleManager.sendCmd`); each maps to a front-panel key.
 export const COMMANDS = {
   GET_NAME: new Uint8Array([0xab, 0xcd, 0x03, 0x5f, 0x01, 0xda]),
   GET_DATA: new Uint8Array([0xab, 0xcd, 0x03, 0x5d, 0x01, 0xd8]),
-  BACKLIGHT: new Uint8Array([0xab, 0xcd, 0x03, 0x4b, 0x01, 0xc6]),
+  BACKLIGHT: new Uint8Array([0xab, 0xcd, 0x03, 0x4b, 0x01, 0xc6]), // cmd 0x4b
+  MAXMIN: new Uint8Array([0xab, 0xcd, 0x03, 0x41, 0x01, 0xbc]), // cmd 0x41 — MAX/MIN
+  RANGE: new Uint8Array([0xab, 0xcd, 0x03, 0x46, 0x01, 0xc1]), // cmd 0x46 — step manual range
+  RANGE_AUTO: new Uint8Array([0xab, 0xcd, 0x03, 0x47, 0x01, 0xc2]), // cmd 0x47 — RANGE long-press (auto)
+  REL: new Uint8Array([0xab, 0xcd, 0x03, 0x48, 0x01, 0xc3]), // cmd 0x48 — relative
+  HZ_DUTY: new Uint8Array([0xab, 0xcd, 0x03, 0x49, 0x01, 0xc4]), // cmd 0x49 — Hz / duty %
+  HOLD: new Uint8Array([0xab, 0xcd, 0x03, 0x4a, 0x01, 0xc5]), // cmd 0x4a — data hold
+  SELECT: new Uint8Array([0xab, 0xcd, 0x03, 0x4c, 0x01, 0xc7]), // cmd 0x4c — function/mode select
 } as const;
 
 export type FrameKind = 'measurement' | 'type-request' | 'data-request' | 'control';

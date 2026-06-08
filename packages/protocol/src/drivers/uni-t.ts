@@ -45,5 +45,16 @@ export const uniT: Driver = {
 
   decode: (bytes, ts) => decode(bytes, ts),
 
-  controls: { backlight: COMMANDS.BACKLIGHT },
+  // Front-panel soft buttons, reverse-engineered from the UNI-T Smart Measure app. Same AB-CD
+  // write characteristic as the handshake; the meter actions them as if the key were pressed.
+  controls: {
+    backlight: COMMANDS.BACKLIGHT,
+    hold: COMMANDS.HOLD,
+    rel: COMMANDS.REL,
+    select: COMMANDS.SELECT,
+    range: COMMANDS.RANGE,
+    rangeAuto: COMMANDS.RANGE_AUTO,
+    hzDuty: COMMANDS.HZ_DUTY,
+    maxMin: COMMANDS.MAXMIN,
+  },
 };

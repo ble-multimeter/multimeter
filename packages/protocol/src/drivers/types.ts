@@ -43,6 +43,18 @@ export interface DriverMatchContext {
   services?: string[];
 }
 
+// Named front-panel soft-button controls a meter may honor (written on demand). Each maps to a
+// command frame in the driver's `controls` map; the session/bindings expose them generically.
+export type MeterControl =
+  | 'backlight'
+  | 'hold'
+  | 'rel'
+  | 'select' // function / mode
+  | 'range' // step manual range
+  | 'rangeAuto' // toggle auto range
+  | 'hzDuty' // Hz / duty %
+  | 'maxMin';
+
 export interface Driver {
   id: string; // 'uni-t'
   label: string; // 'UNI-T BLE'
@@ -56,7 +68,7 @@ export interface Driver {
   handshake(io: DriverIO): Promise<void>;
   onRequest(frame: ParsedFrame, io: DriverIO): void; // answer keep-alive requests
   decode(bytes: Uint8Array, ts: number): Reading;
-  controls?: { backlight?: Uint8Array }; // optional meter commands the device honors
+  controls?: Partial<Record<MeterControl, Uint8Array>>; // optional meter commands the device honors
   // Disambiguate families that share one GATT service (the 0xFFF0 group: bdm/owon-plus/owon-old/
   // voltcraft). Given a raw notification frame, return true iff it matches this driver's format
   // (length + header/marker/checksum). Only required when >1 registered driver shares a service;
