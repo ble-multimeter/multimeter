@@ -19,6 +19,10 @@ describe('uni-t match', () => {
     expect(uniT.match({ name: 'UT60BT-AB12' })).toBe(true);
   });
 
+  it('matches the UT161 series (same AB-CD protocol)', () => {
+    expect(uniT.match({ name: 'UT161D-9F3A' })).toBe(true);
+  });
+
   it('rejects an unrelated device', () => {
     expect(
       uniT.match({ name: 'SomethingElse', services: ['0000fff0-0000-1000-8000-00805f9b34fb'] }),

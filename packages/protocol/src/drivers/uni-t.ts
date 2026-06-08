@@ -17,11 +17,17 @@ export const uniT: Driver = {
   id: 'uni-t',
   label: 'UNI-T BLE',
   verification: 'live-tested',
-  namePrefixes: ['UT60BT'],
+  // UT60BT and the UT161 series (UT161A/B/C/D/E) stream the same AB-CD 19-byte frame and are
+  // routed through this same generic decoder by the Smart Measure app. NOTE: UT171/UT181 share
+  // this ISSC service but have their own protocols — when those drivers land, this service-based
+  // match must become name-based so it stops greedily claiming them (see PLAN: ISSC name-routing).
+  namePrefixes: ['UT60BT', 'UT161'],
   gatt: { service: ISSC_SERVICE, notify: ISSC_NOTIFY, write: [ISSC_WRITE, ISSC_WRITE_FALLBACK] },
 
   match: ctx =>
-    (ctx.services?.includes(ISSC_SERVICE) ?? false) || (ctx.name?.startsWith('UT60BT') ?? false),
+    (ctx.services?.includes(ISSC_SERVICE) ?? false) ||
+    (ctx.name?.startsWith('UT60BT') ?? false) ||
+    (ctx.name?.startsWith('UT161') ?? false),
 
   createFramer: () => new FrameParser(),
 
