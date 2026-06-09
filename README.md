@@ -112,6 +112,13 @@ logic is pure and unit-tested against captured frames. Decode + framing sit behi
 interface in the protocol package, so other BLE multimeters can be added as drivers without
 touching the transport, recording, or UI (a later phase).
 
+## Supported meters & protocols
+
+The app targets the UT60BT, but the protocol package ships drivers for a range of UNI-T and generic
+Bluetooth multimeters (Aneng / BSIDE / ZOYI, Owon, Voltcraft, AICARE). See the
+**[hardware support list](docs/HARDWARE.md)** for every model and its verification state, and
+**[docs/protocols/](docs/protocols/README.md)** for a per-driver protocol spec.
+
 ## Packages
 
 The app is a thin shell over framework-agnostic packages, so you can build your own

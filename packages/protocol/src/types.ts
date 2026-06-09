@@ -1,6 +1,6 @@
 // Shared types and the protocol's lookup tables. Pure data + tiny pure helpers — no
 // BLE, no React — so decode.ts (and its tests) can import this in plain Node.
-// See PROTOCOL.md §3-4.
+// See docs/protocols/uni-t.md (Frame format / Decode).
 
 export interface Reading {
   ts: number; // capture time (ms epoch)
