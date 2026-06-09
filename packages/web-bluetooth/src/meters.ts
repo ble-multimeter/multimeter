@@ -72,6 +72,23 @@ interface MeterEntry {
   unsubscribe: () => void;
   label: string;
   role: string;
+  // true while the role still tracks the device automatically (named from the device on connect,
+  // enumerated on collision); a user rename via setMeterRole pins it (→ false).
+  autoRole: boolean;
+}
+
+/**
+ * Pick a name for an auto-named meter: the device name, or `${name} N` (N≥2) if another channel
+ * already uses it — so two identical meters read "UT60BTk" + "UT60BTk 2" rather than colliding.
+ */
+export function dedupName(base: string, taken: Iterable<string>): string {
+  const set = new Set(taken);
+  if (!set.has(base)) return base;
+  for (let n = 2; n < 1000; n++) {
+    const candidate = `${base} ${n}`;
+    if (!set.has(candidate)) return candidate;
+  }
+  return base;
 }
 
 interface DerivedEntry {
@@ -130,8 +147,9 @@ export class MetersSession {
     } else if (kind === 'single') {
       this.addMeterEntry(this.makeDemoSession(DEFAULT_DEMO_PROFILE), DEFAULT_DEMO_PROFILE);
     } else {
-      // Real BLE: one meter channel, awaiting a connect gesture.
-      this.addMeterEntry(new MeterSession(), { role: 'Meter' });
+      // Real BLE: one meter channel, awaiting a connect gesture. Its role auto-names from the
+      // device once connected ("Meter" is just the pre-connect placeholder).
+      this.addMeterEntry(new MeterSession(), { role: 'Meter', auto: true });
     }
   }
 
@@ -143,7 +161,7 @@ export class MetersSession {
   // snapshot + the derived recompute. `seed` provides the channel's role/label/initial id.
   private addMeterEntry(
     session: MeterSession,
-    seed: { id?: string; role: string; deviceName?: string },
+    seed: { id?: string; role: string; deviceName?: string; auto?: boolean },
   ): MeterEntry {
     const id = seed.id ?? nextChannelId('meter');
     const entry: MeterEntry = {
@@ -152,6 +170,7 @@ export class MetersSession {
       unsubscribe: () => {},
       label: seed.role,
       role: seed.role,
+      autoRole: seed.auto ?? false,
     };
     entry.unsubscribe = session.subscribe(() => this.onMeterTick(entry));
     this.meters.push(entry);
@@ -161,15 +180,30 @@ export class MetersSession {
     return entry;
   }
 
-  // A meter produced a new snapshot. Recompute every derived channel that references it, then emit.
+  // A meter produced a new snapshot. Adopt the device name (if auto), recompute every derived
+  // channel that references it, then emit.
   private onMeterTick(entry: MeterEntry): void {
     const snap = entry.session.getSnapshot();
+    this.maybeAutoName(entry, snap.deviceName);
     for (const d of this.derivedList) {
       if (d.aChannelId === entry.id || d.bChannelId === entry.id) {
         this.recomputeDerived(d, snap.reading?.ts ?? Date.now());
       }
     }
     this.emit();
+  }
+
+  // Adopt the device name as an auto-named channel's role (deduped against the other channels), so
+  // a connected meter reads as its device ("UT60BTk") rather than the "Meter" placeholder. No-op
+  // once the user has renamed it (autoRole=false) or before a device name is known.
+  private maybeAutoName(entry: MeterEntry, deviceName: string | null): void {
+    if (!entry.autoRole || !deviceName) return;
+    const taken = this.meters.filter(m => m !== entry).map(m => m.role);
+    const desired = dedupName(deviceName, taken);
+    if (entry.role === desired) return;
+    // Keep label in sync while it's still tracking the role (the default).
+    if (entry.label === entry.role) entry.label = desired;
+    entry.role = desired;
   }
 
   // Latest snapshot for a meter channel id (or undefined if it's not a meter).
@@ -250,9 +284,10 @@ export class MetersSession {
     return this.meters.find(m => m.id === id)?.session;
   }
 
-  /** Add a real-BLE meter channel (its own requestDevice gesture happens in connect()). */
+  /** Add a real-BLE meter channel (its own requestDevice gesture happens in connect()). With no
+   *  explicit role it auto-names from the device on connect; a caller-supplied role is pinned. */
   addRealMeter = (role = 'Meter'): string => {
-    const entry = this.addMeterEntry(new MeterSession(), { role });
+    const entry = this.addMeterEntry(new MeterSession(), { role, auto: role === 'Meter' });
     this.emit();
     return entry.id;
   };
@@ -280,7 +315,8 @@ export class MetersSession {
     this.emit();
   };
 
-  /** Rename / re-role a meter channel (feeds the derived formula + legend). */
+  /** Rename / re-role a meter channel (feeds the derived formula + legend). Pins the name so it
+   *  no longer auto-tracks the device. */
   setMeterRole = (id: string, role: string): void => {
     const m = this.meters.find(e => e.id === id);
     if (!m) return;
@@ -288,6 +324,7 @@ export class MetersSession {
     // label alone.
     if (m.label === m.role) m.label = role;
     m.role = role;
+    m.autoRole = false;
     this.emit();
   };
   setMeterLabel = (id: string, label: string): void => {

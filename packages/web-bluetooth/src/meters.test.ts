@@ -3,7 +3,23 @@
 // add/remove + staleness behavior. demoKind() reads window.location (empty here → 'none'), so the
 // default bootstrap is a single real MeterSession; we add demo meters explicitly.
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { MetersSession } from './meters';
+import { MetersSession, dedupName } from './meters';
+
+describe('dedupName', () => {
+  it('returns the base name when free', () => {
+    expect(dedupName('UT60BTk', [])).toBe('UT60BTk');
+    expect(dedupName('UT60BTk', ['Other'])).toBe('UT60BTk');
+  });
+
+  it('enumerates from 2 when the base is taken', () => {
+    expect(dedupName('UT60BTk', ['UT60BTk'])).toBe('UT60BTk 2');
+    expect(dedupName('UT60BTk', ['UT60BTk', 'UT60BTk 2'])).toBe('UT60BTk 3');
+  });
+
+  it('fills the first free slot, not just the next integer', () => {
+    expect(dedupName('UT60BTk', ['UT60BTk', 'UT60BTk 3'])).toBe('UT60BTk 2');
+  });
+});
 
 beforeEach(() => vi.useFakeTimers());
 afterEach(() => vi.useRealTimers());
