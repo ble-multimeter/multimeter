@@ -67,3 +67,21 @@ body {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* DSEG7 — a 7-segment LCD face for the meter readout (vendored woff2, SIL OFL; see
+   public/fonts/DSEG-OFL-LICENSE.txt). Self-hosted so it offline-caches via the PWA and pulls
+   from no CDN. `font-display: swap` so the digits render in the fallback mono until it loads. */
+@font-face {
+  font-family: 'DSEG7';
+  src: url('/multimeter/fonts/DSEG7Classic-Bold.woff2') format('woff2');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* The segment readout. DSEG7 has no kerning/lining metrics like a text font, so set a tracking
+   that reads as an LCD and lean on tabular layout from the call site. */
+.font-seg {
+  font-family: 'DSEG7', ui-monospace, monospace;
+  letter-spacing: 0.06em;
+}
