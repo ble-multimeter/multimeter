@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { effectScope, ref, shallowRef, nextTick } from 'vue';
-import { useRecorder } from './useRecorder';
+import { useRecorder, type RecordableChannel } from './useRecorder';
 import { useMeter } from './useMeter';
 import type { Reading } from '@ble-multimeter/protocol';
 
@@ -31,20 +31,29 @@ function reading(over: Partial<Reading> = {}): Reading {
   };
 }
 
+// One meter channel ('v') carrying the given reading — the N=1 case.
+const single = (r: Reading | null): RecordableChannel[] => [
+  { id: 'v', label: 'V', kind: 'meter', reading: r },
+];
+
+// The single channel's view in the snapshot.
+const vView = (api: ReturnType<typeof useRecorder>) =>
+  api.channels.value.find(c => c.id === 'v')!;
+
 describe('vue useRecorder', () => {
-  it('feeds a reactive reading source and exposes windowed stats', () => {
+  it('feeds a reactive channels source and exposes windowed stats', () => {
     const scope = effectScope();
-    const r = ref<Reading | null>(reading({ ts: 1, baseValue: 2 }));
-    const api = scope.run(() => useRecorder(r))!;
+    const cs = shallowRef<RecordableChannel[]>(single(reading({ ts: 1, baseValue: 2 })));
+    const api = scope.run(() => useRecorder(cs))!;
 
-    expect(api.samples.value).toHaveLength(1);
-    r.value = reading({ ts: 2, baseValue: 4 });
-    r.value = reading({ ts: 3, baseValue: 6 });
+    expect(vView(api).samples).toHaveLength(1);
+    cs.value = single(reading({ ts: 2, baseValue: 4 }));
+    cs.value = single(reading({ ts: 3, baseValue: 6 }));
 
-    expect(api.samples.value).toHaveLength(3);
-    expect(api.stats.value.min).toBe(2);
-    expect(api.stats.value.max).toBe(6);
-    expect(api.stats.value.avg).toBe(4);
+    expect(vView(api).samples).toHaveLength(3);
+    expect(vView(api).stats.min).toBe(2);
+    expect(vView(api).stats.max).toBe(6);
+    expect(vView(api).stats.avg).toBe(4);
     scope.stop();
   });
 
@@ -52,24 +61,21 @@ describe('vue useRecorder', () => {
     const scope = effectScope();
     // shallowRef so the Reading isn't wrapped in a deep reactive proxy — recording persists it
     // to IndexedDB, and a Vue proxy isn't structured-cloneable.
-    const r = shallowRef<Reading | null>(reading({ ts: 1 }));
-    const api = scope.run(() => useRecorder(r))!;
+    const cs = shallowRef<RecordableChannel[]>(single(reading({ ts: 1 })));
+    const api = scope.run(() => useRecorder(cs))!;
 
-    // Initial snapshot shape — read every computed ref so each adapter line is exercised.
-    expect(api.truncated.value).toBe(false);
-    expect(api.segment.value?.function).toBe('DCV');
-    expect(typeof api.statsDurationMs.value).toBe('number');
+    expect(vView(api).segment?.function).toBe('DCV');
+    expect(typeof vView(api).statsDurationMs).toBe('number');
     expect(api.recState.value).toBe('idle');
     expect(api.recCount.value).toBe(0);
     expect(api.csvTarget.value).toBeNull();
 
-    // record() → recording; csvTarget surfaces; a fed reading increments the persisted count.
     api.record('Bench');
     await nextTick();
     expect(api.recState.value).toBe('recording');
     expect(api.csvTarget.value?.name).toBe('Bench');
 
-    r.value = reading({ ts: 2, baseValue: 3 });
+    cs.value = single(reading({ ts: 2, baseValue: 3 }));
     await nextTick();
     expect(api.recCount.value).toBe(1);
 
@@ -85,22 +91,20 @@ describe('vue useRecorder', () => {
     api.stop();
     await nextTick();
     expect(api.recState.value).toBe('idle');
-    // stop() fires a final IndexedDB flush asynchronously; let it settle before tearing the
-    // scope down so the deferred persistence completes inside the test boundary.
     await new Promise(r => setTimeout(r, 0));
     scope.stop();
   });
 
   it('onScopeDispose unsubscribes: no reactive update after scope.stop()', async () => {
     const scope = effectScope();
-    const r = ref<Reading | null>(reading({ ts: 1 }));
-    const api = scope.run(() => useRecorder(r))!;
-    expect(api.samples.value).toHaveLength(1);
+    const cs = ref<RecordableChannel[]>(single(reading({ ts: 1 })));
+    const api = scope.run(() => useRecorder(cs))!;
+    expect(vView(api).samples).toHaveLength(1);
 
     scope.stop(); // onScopeDispose → unsub() + rec.dispose()
-    r.value = reading({ ts: 2 }); // the watcher is torn down with the scope
+    cs.value = single(reading({ ts: 2 })); // the watcher is torn down with the scope
     await nextTick();
-    expect(api.samples.value).toHaveLength(1);
+    expect(vView(api).samples).toHaveLength(1);
   });
 });
 

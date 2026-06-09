@@ -11,7 +11,7 @@ function makeSession(over: Partial<Session> = {}): Session {
     startedAt: 1000,
     endedAt: 2000,
     sampleCount: 0,
-    segments: [],
+    channels: [],
     ...over,
   };
 }
