@@ -3,9 +3,9 @@
 
 import { useEffect, useRef, useSyncExternalStore } from 'react';
 import type { Session } from '@ble-multimeter/protocol';
-import { SessionsStore, type OpenedSession } from '@ble-multimeter/recorder';
+import { SessionsStore, type OpenedSession, type OpenedChannel } from '@ble-multimeter/recorder';
 
-export type { OpenedSession };
+export type { OpenedSession, OpenedChannel };
 
 export interface Sessions {
   list: Session[];
