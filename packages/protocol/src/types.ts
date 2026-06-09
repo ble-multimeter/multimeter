@@ -2,6 +2,10 @@
 // BLE, no React — so decode.ts (and its tests) can import this in plain Node.
 // See docs/protocols/uni-t.md (Frame format / Decode).
 
+// The four derived-channel operations (Phase 7). Defined here (not in derived.ts) so Session's
+// ChannelInfo can reference it without a circular import; derived.ts imports it back.
+export type DerivedOp = 'mul' | 'div' | 'add' | 'sub';
+
 export interface Reading {
   ts: number; // capture time (ms epoch)
   function: string; // "DCV", "OHM", … (or "#<n>" for an unknown code)
@@ -50,15 +54,33 @@ export function quantityKey(r: Reading): string {
   return `${r.function}|${r.acdc}`;
 }
 
+// One channel in a recording (Phase 7, plan-7.md §3.2). A recording spans N channels — meter
+// channels (a connected/demo meter) and derived channels (combineReadings of two others). The
+// segment list is *per channel* now (each channel has its own quantity history). `function`/`unit`
+// are the last-seen values, for a quick legend without reading samples.
+export interface ChannelInfo {
+  id: string; // stable channel id (also the [sessionId, channelId, seq] sample key part)
+  label: string; // display name ("V source", "P")
+  kind: 'meter' | 'derived';
+  role?: string | undefined; // meter: role tag; derived: undefined
+  op?: DerivedOp | undefined; // derived only
+  a?: string | undefined; // derived only: A input channel id
+  b?: string | undefined; // derived only: B input channel id
+  function: string; // last-seen function code (or derived formula)
+  unit: string; // last-seen baseUnit
+  segments: { seg: number; function: string; acdc: string; unit: string }[];
+}
+
 // Persisted recording metadata. The full per-sample Readings live in a separate store
-// (the recorder package's storage); this is the lightweight index row.
+// (the recorder package's storage); this is the lightweight index row. Multi-channel: single
+// meter is just `channels.length === 1` — there is no separate single-channel shape.
 export interface Session {
   id: string;
   name: string;
   startedAt: number; // ms epoch
   endedAt: number | null; // null while still recording
-  sampleCount: number;
-  segments: { seg: number; function: string; acdc: string; unit: string }[];
+  sampleCount: number; // total samples across all channels
+  channels: ChannelInfo[]; // what was recorded (meter + derived)
 }
 
 // Index = frame[3] & 0x7F (PROTOCOL §3). Codes 0–21 were verified on our UT60BT. Codes 22–31

@@ -9,6 +9,7 @@ export * from './stats';
 export * from './decimate';
 export * from './csv';
 export * from './segments';
+export * from './derived';
 
 export * from './drivers/types';
 export * from './drivers/registry';

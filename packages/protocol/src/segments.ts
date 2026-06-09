@@ -6,7 +6,10 @@
 // quantityKey rule but can't batch over a full array.)
 
 import { quantityKey, toSample } from './types';
-import type { Reading, Sample, Session } from './types';
+import type { ChannelInfo, Reading, Sample } from './types';
+
+// The per-channel segment metadata shape (one entry per contiguous same-quantity run).
+export type SegmentMeta = ChannelInfo['segments'];
 
 /** The 0-based segment index for each reading (parallel to `readings`). */
 export function segmentIndices(readings: Reading[]): number[] {
@@ -24,9 +27,9 @@ export function segmentIndices(readings: Reading[]): number[] {
   return out;
 }
 
-/** Collapsed per-segment metadata for a Session (one entry per contiguous run). */
-export function deriveSegments(readings: Reading[]): Session['segments'] {
-  const out: Session['segments'] = [];
+/** Collapsed per-segment metadata for a channel (one entry per contiguous run). */
+export function deriveSegments(readings: Reading[]): SegmentMeta {
+  const out: SegmentMeta = [];
   let key: string | null = null;
   let seg = -1;
   for (const r of readings) {
@@ -41,7 +44,7 @@ export function deriveSegments(readings: Reading[]): Session['segments'] {
 }
 
 export interface ReadingSegment {
-  info: Session['segments'][number];
+  info: SegmentMeta[number];
   samples: Sample[];
 }
 
