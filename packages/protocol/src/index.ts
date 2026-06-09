@@ -10,6 +10,8 @@ export * from './decimate';
 export * from './csv';
 export * from './segments';
 export * from './derived';
+export * from './scale';
+export * from './mode';
 
 export * from './drivers/types';
 export * from './drivers/registry';
