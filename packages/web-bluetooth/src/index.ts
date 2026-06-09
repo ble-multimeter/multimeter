@@ -4,4 +4,22 @@
 
 export { Transport, type TransportProfile } from './transport';
 export { MeterSession, type MeterState, type MeterSnapshot } from './session';
-export { isDemoMode, demoReading, demoVolts } from './demo';
+export {
+  MetersSession,
+  type MetersSnapshot,
+  type Channel,
+  type MeterChannel,
+  type DerivedChannel,
+  type DerivedConfig,
+} from './meters';
+export {
+  isDemoMode,
+  demoKind,
+  demoReading,
+  demoReadingFor,
+  demoVolts,
+  DEMO_PROFILES,
+  DEFAULT_DEMO_PROFILE,
+  type DemoKind,
+  type DemoProfile,
+} from './demo';

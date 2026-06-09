@@ -20,7 +20,12 @@ import {
   type Reading,
 } from '@ble-multimeter/protocol';
 import { Transport } from './transport';
-import { isDemoMode, demoReading } from './demo';
+import {
+  isDemoMode,
+  demoReadingFor,
+  DEFAULT_DEMO_PROFILE,
+  type DemoProfile,
+} from './demo';
 
 export type MeterState =
   | 'unsupported' // no Web Bluetooth
@@ -48,7 +53,11 @@ const SNIFF_TIMEOUT_MS = 4000; // give up identifying a shared-service meter aft
 const ISSC_SERVICE = '49535343-fe7d-4ae5-8fa9-9fafd205e455';
 
 export class MeterSession {
-  readonly isDemo = isDemoMode();
+  readonly isDemo: boolean;
+  // Which demo source this session streams (only consulted in demo mode). Defaults to the legacy
+  // single-DCV profile, so a plain `new MeterSession()` in `?demo` is unchanged; the MetersSession
+  // coordinator passes a distinct profile per demo meter (V source, I source, …).
+  private readonly demoProfile: DemoProfile;
 
   private snap: MeterSnapshot;
   private listeners = new Set<() => void>();
@@ -77,7 +86,11 @@ export class MeterSession {
     waitForFrame: (pred, timeoutMs) => this.waitForFrame(pred, timeoutMs),
   };
 
-  constructor() {
+  // `opts.demoProfile` only matters in demo mode; `opts.forceDemo` lets the coordinator spin up a
+  // demo meter regardless of the URL (used by "Add demo meter").
+  constructor(opts: { demoProfile?: DemoProfile; forceDemo?: boolean } = {}) {
+    this.isDemo = opts.forceDemo ?? isDemoMode();
+    this.demoProfile = opts.demoProfile ?? DEFAULT_DEMO_PROFILE;
     // Demo never touches Bluetooth, so it must run even where Web Bluetooth is absent.
     const state: MeterState = this.isDemo || Transport.supported ? 'idle' : 'unsupported';
     this.snap = { state, reading: null, deviceName: null, error: null, controls: [] };
@@ -150,11 +163,12 @@ export class MeterSession {
     if (this.demoTimer) return;
     // Pretend to be a UT60BT so the demo surfaces its control set (writes are no-ops — no transport).
     this.driver = driverById('uni-t') ?? null;
-    this.set({ deviceName: 'UT60BT (demo)', state: 'live', controls: this.controlNames() });
+    const profile = this.demoProfile;
+    this.set({ deviceName: profile.deviceName, state: 'live', controls: this.controlNames() });
     const start = Date.now();
     this.demoTimer = setInterval(() => {
       const ts = Date.now();
-      this.set({ reading: demoReading((ts - start) / 1000, ts) });
+      this.set({ reading: demoReadingFor(profile, (ts - start) / 1000, ts) });
     }, DEMO_INTERVAL_MS);
   }
   private stopDemo(): void {
