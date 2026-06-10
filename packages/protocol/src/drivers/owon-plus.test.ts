@@ -189,16 +189,25 @@ describe('owon-plus decode (real frames from the source app TestData dev_type 6)
     expect(r.displayText).toBe('000.0');
   });
 
-  it('surfaces the hold/rel/auto/bat/min mode flags (C# string-index order)', () => {
-    // mode word data[3]<<8|data[2] = 0xF9F0 = 1111100111110000.
-    // String-indexed mode[0..5] = 1,1,1,1,1,0 → hold/rel/auto/bat/min set, max clear.
-    const r = decodeOwonPlus(Uint8Array.from([33, 18, 240, 249, 0, 0]));
+  it('surfaces the hold/rel/auto/bat/min mode flags (OWON app LSB-first Status order)', () => {
+    // mode word data[3]<<8|data[2] = 0x001F = ...00011111.
+    // Per the vendor app's Status enum, flag n is at bit n: bits 0..4 (hold/rel/auto/bat/min)
+    // set, bit 5 (max) clear.
+    const r = decodeOwonPlus(Uint8Array.from([33, 18, 0x1f, 0x00, 0, 0]));
     expect(r.flags.hold).toBe(true);
     expect(r.flags.rel).toBe(true);
     expect(r.flags.auto).toBe(true);
     expect(r.flags.lowBattery).toBe(true);
     expect(r.flags.min).toBe(true);
     expect(r.flags.max).toBe(false);
+  });
+
+  it('reads max (bit 5) independently of min (bit 4)', () => {
+    // mode word 0x0020 → only bit 5 set → max true, min/hold/rel/auto/bat false.
+    const r = decodeOwonPlus(Uint8Array.from([33, 18, 0x20, 0x00, 0, 0]));
+    expect(r.flags.max).toBe(true);
+    expect(r.flags.min).toBe(false);
+    expect(r.flags.hold).toBe(false);
   });
 
   it('returns a blank reading on a short frame (never throws)', () => {

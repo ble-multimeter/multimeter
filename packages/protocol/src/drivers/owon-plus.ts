@@ -155,19 +155,20 @@ export function decodeOwonPlus(bytes: Uint8Array, ts = 0): Reading {
   const diode = fn === 10;
   const cont = fn === 11;
 
-  // Mode flags. The source renders `data[3]<<8|data[2]` as a 16-char binary string (MSB first)
-  // and indexes it positionally: mode[0]=HOLD, [1]=REL, [2]=AUTO, [3]=Bat, [4]=MIN, [5]=MAX.
-  // So string index i corresponds to the numeric bit (15 - i) of the word — NOT the LSB-first
-  // numbering in the inline `enum` comment (which is the original Android source's, and which the
-  // dispatched C# does not follow). We mirror the C# string-index behaviour, which is authoritative.
+  // Mode flags. `mode = data[3]<<8|data[2]` is a bitfield, numbered LSB-first per the OWON app's
+  // `MultimeterClient.Status` enum (HOLD(0), REL(1), AUTO(2), Bat(3), MIN(4), MAX(5), OL(6),
+  // RMR(7), PMIN(8), PMAX(9), UL(10), LPF0(11), LPF1(12), VBAR(13)). The app right-aligns
+  // `Integer.toBinaryString(mode)` against that enum array in `handleReceivedData_common`, so flag
+  // n lives at bit n. (The earlier C#-port reading indexed an MSB-first padded string and put HOLD
+  // at bit 15 — that is wrong for real hardware; the vendor Android app is authoritative here.)
   const mode = ((bytes[3]! << 8) | bytes[2]!) & 0xffff;
-  const strBit = (i: number): boolean => ((mode >> (15 - i)) & 1) === 1;
-  const hold = strBit(0);
-  const rel = strBit(1);
-  const auto = strBit(2);
-  const lowBattery = strBit(3);
-  const min = strBit(4);
-  const max = strBit(5);
+  const bit = (n: number): boolean => ((mode >> n) & 1) === 1;
+  const hold = bit(0);
+  const rel = bit(1);
+  const auto = bit(2);
+  const lowBattery = bit(3);
+  const min = bit(4);
+  const max = bit(5);
   // Peak min/max are not surfaced by the dispatched owonPlusTypeDecode; left false.
   const peakMin = false;
   const peakMax = false;
