@@ -1,21 +1,32 @@
-# Voltcraft VC800 / VC900 — `voltcraft`
+# Voltcraft VC900-series (R10W) — `voltcraft`
 
-> **State:** `untested` (ported, not bench-tested). **Driver:** `packages/protocol/src/drivers/voltcraft.ts`. **Source:** ported from `webspiderteam/Bluetooth-DMM-For-Windows` `Utilities.cs` `VoltcraftDecode` (`isBDM == 5`); reverse-engineered upstream by user FireBird3314.
+> **State:** **app-verified** (`verification: 'app-verified'`). The protocol below was confirmed **byte-for-byte against the official Voltcraft "series800" app** (`com.voltcraft.series800`, an OWON-built Flutter binary / in-app `com.owon.imeter`) using a **BLE emulator as a decode oracle**: arbitrary 15-byte frames were streamed to the real app and the on-screen value / unit / decimals / sign / over-range / annunciators were read back, and a state-word **bit-sweep** pinned every annunciator bit. This is a hardware-free *bench* verification, **not** yet a physical-meter test — hence `app-verified`, not `live-tested`. **Driver:** `packages/protocol/src/drivers/voltcraft.ts`.
 
-The `voltcraft` driver decodes the Voltcraft VC800/VC900 family of BLE bench/handheld multimeters (App `DevType 5` in the source Windows app). Like `bdm` and the `owon` families it lives behind GATT service `0xFFF0`, so service UUID alone cannot pick the decoder — the orchestrator disambiguates by sniffing the first raw notification. The meter does not handshake or answer requests: the moment a client subscribes to the notify characteristic it free-streams one 15-byte notification per LCD update. Each frame carries **two** displays (primary and secondary), but the engine has no secondary-display field, so the driver decodes and surfaces only the primary display while still parsing/skipping the secondary block so framing stays correct. There is no scrambling, no AB-CD sync word, and no checksum; framing keys off two constant `0xF0` marker bytes at fixed offsets. The driver is receive-only — it exposes no controls. Everything below is derived from `voltcraft.ts`; byte offsets and bitfields are quoted directly from the code.
+The `voltcraft` driver decodes the Voltcraft VC900-series (OWON "iMeter" rebadges; the app calls this the **R10W** protocol, models VC915/VC925/VC831/851/871/891). Like `bdm` and the `owon` families it lives behind GATT service `0xFFF0`, so service UUID alone cannot pick the decoder — the orchestrator disambiguates by sniffing the first raw notification. The meter does not handshake or answer requests: the moment a client subscribes to the notify characteristic it free-streams one 15-byte notification per LCD update. There is no scrambling, no AB-CD sync word, and no checksum.
+
+## Protocol corrections (vs the earlier port)
+
+The driver was previously ported from the third-party `webspiderteam/Bluetooth-DMM-For-Windows` `VoltcraftDecode` (FireBird3314's annotations), which described a *different* protocol generation and was wrong in several ways. The oracle test corrected all of them:
+
+| Field | Old (wrong) port | **Corrected (app-verified)** |
+| --- | --- | --- |
+| Word layout | LE **16-bit** halves of a `0xF0`-marked dual-display frame | five **24-bit LITTLE-endian** words at byte offsets **0/3/6/9/12** |
+| Markers / checksum | constant `0xF0` at `bytes[2]`/`bytes[8]` | **none** — no markers, no checksum |
+| Flag bit order | **MSB-first** (HOLD = bit15) — the headline bug | **LSB-first**, **HOLD = bit0** |
+| Function table | even-keyed / power-extended (codes up to 22) | **consecutive** codes **0..13** (0 = V DC … 13 = NCV) |
+| Decimal field | "decimal-point position" with `6`=UL / `7`=OL sentinels | the field **IS the decimal-place count**; value = `count / 10**decimals` |
+| Over-range | inferred from the decimal-point sentinel | from the value-word **over-range selector** (1=OL, 2=UL, 3=HI) |
+| Sign | `bytes[5]` bit7 (still correct) | value-word **bit23** (== `bytes[5]` bit7) |
+
+> The flag-order fix is the same class of bug fixed in `owon-plus` (commit `4506bdc`): these are all OWON gear-word decoders, and the OWON status word is a straight LSB-numbered bitmask.
 
 ## Models
 
-The VC800 and VC900 series of Voltcraft DMMs. The driver header (`voltcraft.ts:1-3`) ties these to the source app's `DevType 5`. These meters advertise inconsistent BLE names, so discovery leans on the service-UUID filter, with name prefixes `"VC"` / `"Voltcraft"` as a fallback (`voltcraft.ts:298-302, 305-308`).
+The Voltcraft VC900-series handhelds (R10W protocol). The app maps the FFF2 series id to the model: VC915 = series 91, VC925 = 92, VC831/851/871/891 = 83/85/87/89, all → the R10W 15-byte parser. These meters advertise inconsistent BLE names, so discovery leans on the service-UUID filter, with name prefixes `"VC"` / `"Voltcraft"` as a fallback.
 
-| Series | Notes |
-| --- | --- |
-| Voltcraft VC800 | dual-display handheld (App `DevType 5`) |
-| Voltcraft VC900 | dual-display handheld (App `DevType 5`) |
+> **Out of scope:** the **VC800 / R2W meters use a SEPARATE 6-byte protocol** (the app's "R2W" / OWON "B41" parser, 16-bit big-endian fields) and are **not handled by this driver** — future work. The driver decodes only the R10W 15-byte frame.
 
 ## Transport (GATT)
-
-GATT profile (`voltcraft.ts:290-292, 303`):
 
 | Role | UUID |
 | --- | --- |
@@ -25,186 +36,123 @@ GATT profile (`voltcraft.ts:290-292, 303`):
 
 The write characteristic is declared for profile-completeness only; the driver never writes (no handshake, no keep-alive, no controls).
 
-**Routing.** The `0xFFF0` service is shared by several unrelated families (`bdm`, `owon-plus`, `owon-old`), so `match()` accepts the device when it advertises `0xFFF0` **or** its name starts with `"VC"` **or** `"Voltcraft"` (`voltcraft.ts:305-308`). The session then disambiguates by sniffing the first raw notification frame against each candidate driver's `sniff()` predicate.
+**Routing.** The `0xFFF0` service is shared by several unrelated families (`bdm`, `owon-plus`, `owon-old`), so `match()` accepts the device when it advertises `0xFFF0` **or** its name starts with `"VC"` **or** `"Voltcraft"`. The session then disambiguates by sniffing the first raw notification frame against each candidate driver's `sniff()` predicate.
 
-**Frame-sniff rule** (`looksLikeVoltcraftFrame`, `voltcraft.ts:253-255`). A frame is a Voltcraft frame iff it is at least 15 bytes long **and** carries the constant `0xF0` markers at `bytes[2]` and `bytes[8]`:
+**Frame-sniff rule** (`looksLikeVoltcraftFrame`). A frame is a voltcraft frame iff it is at least 15 bytes long **and** its gear-function code (gear-word bits 6..10) is a valid `0..13`:
 
 ```ts
-bytes.length >= 15 && bytes[2] === 0xf0 && bytes[8] === 0xf0
+bytes.length >= 15 && ((le24(bytes, 0) >> 6) & 0x1f) <= 13;
 ```
 
-This is the discriminator vs the other `0xFFF0` families: `bdm` is exactly 11 bytes and `owon` frames are shorter (6 bytes), so neither can satisfy the 15-byte length test, and the two `0xF0` markers reject coincidental 15-byte payloads (`voltcraft.ts:246-251`).
+This is the discriminator vs the other `0xFFF0` families: `bdm` is exactly 11 bytes, `owon-plus` is 6 and `owon-old` is 14, so none can satisfy the 15-byte length test; the gear-code check rejects coincidental 15-byte payloads whose function field would be 14..31 (unused). (There are no marker/checksum bytes to test, unlike the old `0xF0`-marker rule.)
 
 ## Handshake / session start
 
-None. The driver's `handshake()` is a no-op (`voltcraft.ts:313-315`) and `onRequest()` is a no-op (`voltcraft.ts:318-320`): there is no AB-CD sync, no challenge/response, and no request/response keep-alive in this family. Subscribing to the `0xFFF4` notify characteristic is sufficient — the meter streams measurement notifications immediately and continuously (`voltcraft.ts:312`).
+None. `handshake()` and `onRequest()` are no-ops: there is no AB-CD sync, no challenge/response, and no request/response keep-alive. Subscribing to the `0xFFF4` notify characteristic is sufficient — the meter streams measurement notifications immediately and continuously. (The app performs an FFF1 MD5 "anti-counterfeit" exchange before it will *display* data, but that is an app→meter gate, not needed to *receive* frames.)
 
 ## Frame format
 
-One BLE notification carries exactly one 15-byte frame (`FRAME_LEN = 15`, `voltcraft.ts:33`; the source app accepts any `data.Length > 14`, and the driver slices fixed 15-byte windows, `voltcraft.ts:34`). The frame has:
+One BLE notification carries exactly one 15-byte R10W frame (`FRAME_LEN = 15`). The frame is five **24-bit LITTLE-endian** words `w = b[i] | b[i+1]<<8 | b[i+2]<<16`, with **no marker bytes and no checksum**:
 
-- **No scrambling** (raw bytes, no XOR key).
-- **No AB-CD sync word.**
-- **No checksum.**
-- **Two constant `0xF0` markers** at `bytes[2]` and `bytes[8]` (`F0_MARK = 0xf0`, `voltcraft.ts:35`) separating the primary and secondary display blocks — used purely to sync the stream.
-
-The frame is a **dual-display** structure: a PRIMARY block, a SECONDARY block, then shared mode/power flags. Full layout (FireBird3314's annotations, `voltcraft.ts:10-25`):
-
-| Bytes | Field | Meaning |
+| Bytes | Word | Meaning |
 | --- | --- | --- |
-| `[0..1]` | primary "symbols" word (LE) | function / prefix / decimal-point bitfield (+ bit 12 = secondary-display active) |
-| `[2]` | `0xF0` marker | constant primary separator |
-| `[3..4]` | primary count (LE) | raw measurement `0..65535` |
-| `[5]` | bit 7 | primary negative |
-| `[6..7]` | secondary "symbols" word (LE) | same bitfield layout as primary |
-| `[8]` | `0xF0` marker | constant secondary separator |
-| `[9..10]` | secondary count (LE) | raw secondary measurement |
-| `[11]` | bit 7 | secondary negative |
-| `[12..13]` | mode flags word (LE) | HOLD / REL / AUTO / LOWBATT / MIN / MAX |
-| `[14]` | power-measurement flags | LoZ / PF / AC / DC / USB power — **not surfaced** |
+| `[0..2]` | primary gear word | decimals / SI-prefix / gear-function bitfield (+ bit 12 = secondary-display active) |
+| `[3..5]` | primary value word | count magnitude / over-range selector / sign |
+| `[6..8]` | secondary gear word | only meaningful when primary bit 12 is set (**ignored** by this driver) |
+| `[9..11]` | secondary value word | secondary display (**ignored**) |
+| `[12..14]` | state word | LSB-numbered annunciator bitmask |
 
-### The "symbols" word
+We surface only the **primary** display (the engine has no secondary-display field). The secondary block (`bytes[6..11]`) is ignored; the real meter sends it zero with bit 12 cleared. (Supporting the secondary display is possible future work.)
 
-Both displays share a 16-bit little-endian "symbols" word (primary `bytes[0..1]`, secondary `bytes[6..7]`). The driver reads it as `(bytes[1] << 8) | bytes[0]` (`voltcraft.ts:165`) and decomposes it into three packed fields (`voltcraft.ts:166-168`):
+### Gear word (`bytes[0..2]`, LE)
 
 | Field | Bits | Extract | Meaning |
 | --- | --- | --- | --- |
-| `point` | 0..2 | `symbols & 0x07` | decimal-point position (0..4 places), or `6`=UL / `7`=OL sentinels |
-| `scale` | 3..5 | `(symbols >> 3) & 0x07` | metric-prefix index into `PREFIX` |
-| `fn` | 6..10 | `(symbols >> 6) & 0x1f` | function / display-mode code (see Decode) |
-| (secondary active) | 12 | — | header bit 12 = secondary display active (noted but not modelled) |
+| `decimals` | 0..2 | `g & 0x07` | number of decimal places (value = `count / 10**decimals`) |
+| `scale` | 3..5 | `(g >> 3) & 0x07` | SI-prefix index into `PREFIX` |
+| `gear` | 6..10 | `(g >> 6) & 0x1f` | gear / function code (table below) |
+| (secondary active) | 12 | — | controls whether `bytes[6..11]` are parsed (not modelled) |
 
-### Framer / resync
+**Gear / function table** (consecutive codes, app-verified):
 
-`VoltcraftFramer` (`voltcraft.ts:261-288`) buffers incoming chunks and tolerates split/coalesced notifications like the other drivers, even though in practice one notification equals one frame. On each pass it calls `sync()`, then if at least 15 bytes are buffered it emits a `measurement` frame of the first 15 bytes and consumes them (`voltcraft.ts:267-273`). `sync()` (`voltcraft.ts:282-287`) advances the buffer head (shifting one byte at a time) until `buf[2] === 0xF0` **and** `buf[8] === 0xF0`; it can only confirm once at least 9 bytes are buffered, otherwise it keeps what it has. `reset()` clears the buffer (`voltcraft.ts:276-278`).
-
-## Decode
-
-`decodeVoltcraft(bytes, ts)` (`voltcraft.ts:161-243`) is pure and never throws; it degrades gracefully. A frame shorter than 15 bytes returns a `blank` reading (`voltcraft.ts:162`; blank shape at `voltcraft.ts:78-102`). An unknown function code renders a `'?'` unit (via `functionFor`) rather than erroring. Only the **primary** display is surfaced in the `Reading`; the secondary block (`bytes[6..11]`) is parsed/skipped exactly as the source does so framing stays correct (`voltcraft.ts:27-28`).
-
-### Primary count and sign
-
-- `count = (bytes[4] << 8) | bytes[3]` — little-endian raw measurement, `0..65535` (`voltcraft.ts:171`).
-- `negative = (bytes[5] & 0x80) > 0` — bit 7 of `bytes[5]` (`voltcraft.ts:170`).
-
-### Function / unit table
-
-The function code `fn` (symbols bits 6..10) maps to a base unit through `FUNCTION_UNIT` (`voltcraft.ts:47-68`), mirroring the source's chain of `((function == n) ? "X" : "")` concatenations:
-
-| `fn` | Base unit | Quantity | | `fn` | Base unit | Quantity |
+| `gear` | Quantity | Base unit | | `gear` | Quantity | Base unit |
 | --- | --- | --- | --- | --- | --- | --- |
-| 0 | `V` | Voltage DC | | 11 | `Ω` | Continuity (ohms) |
-| 1 | `V` | Voltage AC | | 12 | `''` | hFE (bare gain) |
-| 2 | `A` | Current DC | | 13 | `''` | NCV (strength bar) |
-| 3 | `A` | Current AC | | 14 | `W` | Power [W] |
-| 4 | `Ω` | Resistance | | 15 | `VA` | Power [VA] |
-| 5 | `F` | Capacitance | | 16 | `PF` | Power factor |
-| 6 | `Hz` | Frequency | | 18 | `Ah` | Energy [Ah] |
-| 7 | `%` | Duty cycle | | 19 | `''` | Time [hh:mm:ss] (no primary unit) |
-| 8 | `°C` | Temperature C | | 20 | `Wh` | Energy [Wh] |
-| 9 | `°F` | Temperature F | | 21 | `V` | Voltage [V] |
-| 10 | `V` | Diode (volts) | | 22 | `A` | Current [A] |
+| 0 | V **DC** | `V` | | 7 | duty cycle | `%` |
+| 1 | V **AC** | `V` | | 8 | temperature | `°C` |
+| 2 | A **DC** | `A` | | 9 | temperature | `°F` |
+| 3 | A **AC** | `A` | | 10 | diode | `V` |
+| 4 | resistance | `Ω` | | 11 | continuity | `Ω` |
+| 5 | capacitance | `F` | | 12 | hFE | `''` (bare gain) |
+| 6 | frequency | `Hz` | | 13 | NCV | `''` (strength bar) |
 
-Codes 12 (hFE), 13 (NCV) and 19 (time) carry no base unit. Any `fn` not in the table falls back to `''` (`voltcraft.ts:190`) and is rendered via `functionFor` as `'?'`.
+AC = `{1, 3}`, DC = `{0, 2}` (the gear code is authoritative for the function and for `acdc`; the redundant AC/DC state bits 13/14 are not used). `diode = gear 10`, `cont = gear 11`. hFE/NCV carry no SI unit.
 
-### SI prefix
+**SI prefix** (`scale`): `PREFIX = ['p', 'n', 'µ', 'm', '', 'k', 'M', 'G']` — all eight codes are expressible. Index 4 (`''`) is the unprefixed unit. `displayUnit = PREFIX[scale] + baseUnit` (empty for hFE/NCV).
 
-The prefix index `scale` (symbols bits 3..5) indexes `PREFIX = ['p', 'n', 'µ', 'm', '', 'k', 'M', 'G']` (`voltcraft.ts:38`). Index 4 (`''`) is the unprefixed unit. `displayUnit` is `PREFIX[scale] + baseUnit`, except when the base unit is empty (then `displayUnit` is `''`, `voltcraft.ts:190-191`).
+> Note: `PREFIX` includes `p` (pico) and `G` (giga), but the shared `unitInfo()` normalizer recognizes only `n µ m k M`. A `p`- or `G`-prefixed display decodes correctly as a string but is treated as exponent 0 during SI normalization.
 
-> Note: `PREFIX` includes `p` (pico) and `G` (giga), but the shared `unitInfo()` normalizer (`types.ts:157, 168-174`) only recognizes prefixes `n µ m k M`. A `p`- or `G`-prefixed display unit therefore decodes correctly as a string but is treated as exponent 0 during SI normalization (`baseUnit` keeps the prefix, `baseValue` = `displayValue`).
+### Value word (`bytes[3..5]`, LE)
 
-### Decimal point, overload / underload
+| Field | Bits | Extract | Meaning |
+| --- | --- | --- | --- |
+| `count` | 0..18 | `v & 0x7FFFF` | magnitude (≤ 524287) |
+| `overrange` | 20..22 | `(v >> 20) & 0x07` | `0`=normal, `1`=**OL**, `2`=**UL**, `3`=**HI** |
+| `sign` | 23 | `bytes[5] & 0x80` | `1` ⇒ negative |
 
-The decimal point is placed by `point` (symbols bits 0..2). Values `0..4` are point positions; the two top values are overload sentinels (`voltcraft.ts:41-43`):
-
-| `point` | Meaning |
-| --- | --- |
-| `0` | no decimal point |
-| `1..4` | decimal point that many places from the right |
-| `6` (`POINT_UL`) | underload → `U.L` |
-| `7` (`POINT_OL`) | overload → `O.L` |
-
-`overload = point === 7`, `underload = point === 6` (`voltcraft.ts:175-176`). The source emits `" O.L "` / `" U.L "` with surrounding spaces; the driver trims to `O.L` / `U.L` for a tidy `displayText` (`voltcraft.ts:178-182`).
-
-### Display text formatting
-
-For a normal reading, `formatCount(count, point, negative)` (`voltcraft.ts:147-154`) builds the LCD string exactly as the source's `measurement.ToString("00000").Insert(len - point, ".")`: zero-pad the raw count to 5 digits, then insert a `.` `point` places from the right (`point == 0` → no point), and prepend `-` when negative. E.g. count `1002`, point `3`, positive → `01.002`; count `42`, point `0`, negative → `-00042`.
+`displayValue = count / 10**decimals`, negated when `sign`. When `overrange` is non-zero the `displayText` is the sentinel `OL` / `UL` / `HI` and `displayValue` is `null`. `bargraph` is always `0` — the R10W frame has no analog bar.
 
 ### hFE and NCV special cases
 
-Two function codes override the display (`voltcraft.ts:195-200`):
+- **`gear == 12` (hFE):** `displayUnit` forced to `''` (a bare transistor gain); the numeric text is kept; `function` = `HFE`.
+- **`gear == 13` (NCV):** `displayText` becomes a strength bar — `'-'.repeat(count)` when `count > 0`, else `'EF'` — with `displayUnit = ''`, `displayValue = null`, `function = NCV`.
 
-- **`fn == 12` (hFE):** `displayUnit` forced to `''` (a bare transistor gain, not an SI quantity). The numeric `displayText` from `formatCount` is kept.
-- **`fn == 13` (NCV):** `displayText` becomes a strength bar — `'-'.repeat(count)` when `count > 0`, otherwise `'EF'` — and `displayUnit` is forced to `''`.
+### State word (`bytes[12..14]`, LE) — annunciator flags
 
-### AC/DC classification
+A straight **LSB-numbered bitmask** (each set bit lights its annunciator). Confirmed by live bit-sweep:
 
-`acdcFor(fn)` (`voltcraft.ts:71-75`): `AC` for `fn ∈ {1, 3}`, `DC` for `fn ∈ {0, 2}`, otherwise `''`. (So only the basic V/A function codes carry an AC/DC tag; the duplicate voltage/current codes 21/22 report `''`.)
+| Bit | Annunciator | | Bit | Annunciator | | Bit | Annunciator |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| **0** | **HOLD** | | 7 | RMR | | 14 | DC |
+| 1 | REL | | 8 | Loz | | 15 | USB |
+| 2 | AUTO | | 9 | LPF | | 16 | Err |
+| 3 | Bat (low battery) | | 10 | Peak | | 17 | INRUSH |
+| 4 | MIN | | (11) | — (blank) | | 18 | OSC |
+| 5 | MAX | | 12 | Cosφ | | | |
+| 6 | AVG | | 13 | AC | | | |
 
-### Numeric value and normalization
+The driver surfaces the subset the `Reading.flags` shape carries: `hold` = bit0, `rel` = bit1, `auto` = bit2, `lowBattery` = bit3 (Bat), `min` = bit4, `max` = bit5. `peakMax`/`peakMin`/`hvWarning` are not represented in this frame (Peak is a single bit10, not split max/min) and are hard-coded `false`.
 
-A reading is numeric only when it is **not** overloaded/underloaded and `displayText` matches `NUMERIC = /^-?\d*\.?\d+$/` (`voltcraft.ts:142, 202`). `displayValue = Number(displayText)` when numeric, else `null` (`voltcraft.ts:203`). `unitInfo(displayUnit)` (`types.ts:168-174`) splits the displayed unit into SI `base` + prefix exponent (`n`→−9, `µ`→−6, `m`→−3, `k`→3, `M`→6); `baseValue = displayValue * 10**exp` (`voltcraft.ts:205-206`) so range changes (mV↔V, kΩ↔MΩ) keep a continuous normalized curve. `bargraph` is always `0` — the Voltcraft frame has no analog bar (`voltcraft.ts:230`).
+## Decode
 
-### Status flags
+`decodeVoltcraft(bytes, ts)` is pure and never throws. A frame shorter than 15 bytes returns a `blank` reading; an unknown gear code renders a `'?'` unit via `functionFor`. `functionFor(baseUnit, acdc, diode, cont)` maps the decoded unit + mode to a range-independent function key (`DCV`/`ACV`/`DCA`/`ACA`/`OHM`/`CAP`/`Hz`/`%`/`°C`/`°F`, plus `DIODE`/`CONT`/`HFE`/`NCV`) so range steps (mV↔V, kΩ↔MΩ) stay one chart segment while a real mode change splits. `unitInfo()` normalizes the displayed unit into SI `base` + exponent for `baseValue`.
 
-The mode flags word (`bytes[12..13]`, little-endian) is read as `(bytes[13] << 8) | bytes[12]` (`voltcraft.ts:211`). The source reads it MSB-first as a 16-bit binary string and indexes `mode[0..5]`; translating those string indices to bit tests (`mode[0]` = bit 15, the top bit of the high byte `bytes[13]`) gives (`voltcraft.ts:212-218`):
+### Worked examples (app-verified bytes)
 
-| Flag | Source index | Bit | Code ref |
-| --- | --- | --- | --- |
-| `hold` | `mode[0]` | 15 | `voltcraft.ts:213` |
-| `rel` | `mode[1]` | 14 | `voltcraft.ts:214` |
-| `auto` | `mode[2]` | 13 | `voltcraft.ts:215` |
-| `lowBattery` | `mode[3]` | 12 | `voltcraft.ts:216` |
-| `min` | `mode[4]` | 11 | `voltcraft.ts:217` |
-| `max` | `mode[5]` | 10 | `voltcraft.ts:218` |
-| `hvWarning` | — | — | always `false` — not surfaced (`voltcraft.ts:238`) |
-| `peakMax` | — | — | always `false` (`voltcraft.ts:239`) |
-| `peakMin` | — | — | always `false` (`voltcraft.ts:240`) |
-
-The power-measurement flags byte (`bytes[14]`: LoZ / PF / AC / DC / USB power) is **not surfaced** (`voltcraft.ts:25`).
-
-### Function key
-
-`functionFor(baseUnit, acdc, diode, cont)` (`voltcraft.ts:107-140`) maps the decoded unit + mode to a range-independent function key so range steps stay one chart segment while a real mode change splits. `diode` is `fn == 10`, `cont` is `fn == 11` (`voltcraft.ts:184-185`):
-
-| Condition | `function` |
+| Bytes (hex) | Decode |
 | --- | --- |
-| `diode` (fn 10) | `DIODE` |
-| `cont` (fn 11) | `CONT` |
-| `baseUnit === 'V'` | `${acdc}V` (e.g. `ACV`/`DCV`) or `V` if no AC/DC |
-| `baseUnit === 'A'` | `${acdc}A` or `A` |
-| `baseUnit === 'Ω'` | `OHM` |
-| `baseUnit === 'F'` | `CAP` |
-| `baseUnit === 'Hz'` | `Hz` |
-| `baseUnit === '%'` | `%` |
-| `baseUnit === '°C'` | `°C` |
-| `baseUnit === '°F'` | `°F` |
-| `baseUnit === 'W'` | `W` |
-| `baseUnit === 'VA'` | `VA` |
-| `baseUnit === 'PF'` | `PF` |
-| `baseUnit === 'Ah'` | `Ah` |
-| `baseUnit === 'Wh'` | `Wh` |
-| else | `baseUnit` or `'?'` |
-
-The diode/continuity checks come first, so they win over the unit-based mapping (a continuity reading carries `Ω` but reports `CONT`; diode carries `V` but reports `DIODE`). The result feeds `quantityKey` (`types.ts:49-51`) as `function|acdc`, which controls chart-segment splitting.
+| `23 00 00 68 10 00 00 00 00 00 00 00 00 00 00` | `4.200 V` DC (gear 0, decimals 3, count 4200) |
+| `21 00 00 2a 00 00 00 00 00 00 00 00 01 00 00` | `4.2 V` DC + **HOLD** (decimals 1, count 42, state bit0) |
+| `40 00 00 00 00 10 00 00 00 00 00 00 00 00 00` | **OL** V AC (gear 1, over-range 1) |
 
 ## Controls
 
-Receive-only. The driver declares no `controls` map (none in `voltcraft.ts:294-325`), and the write characteristic, while present in the GATT profile, is never used. There are no soft-button commands (RANGE/SELECT/HOLD/REL/Hz/MAX-MIN) for this family.
+Receive-only. No `controls` map; the write characteristic, while present in the GATT profile, is never used.
 
 ## Verification
 
-`verification: 'ported-unverified'` (`voltcraft.ts:297`). The decoder was ported from `Utilities.cs` `VoltcraftDecode` (the function dispatched for `isBDM == 5` in `ParseGattValue`) and cross-checked against the synthetic frames in the source app's `TestData(dev_type == 9, …)` (`voltcraft.ts:5-8`), but it has **not** been bench-tested on physical hardware.
+`verification: 'app-verified'`. The protocol was confirmed **byte-for-byte against the official Voltcraft series800 app** (OWON `com.owon.imeter` Flutter build) via a BLE emulator oracle: a fake peripheral advertised series 91 (VC915), passed the app's FFF1 MD5 anti-counterfeit gate, and free-streamed arbitrary 15-byte R10W frames on FFF4 while the on-screen reading was observed. Setting `4.2 V` showed `0004.2 V`; changing to `230.5 V` changed the display; `1.0 MΩ` showed `MΩ`; the `f hold` toggle lit the **HOLD** annunciator. A state-word bit-sweep mapped every annunciator bit (HOLD = bit0 … OSC = bit18). The function/prefix/decimal/over-range/sign fields and the LSB-first flag order are therefore confirmed.
 
-What is inferred / unverified:
-- The dual-display layout and byte offsets come from FireBird3314's reverse-engineering annotations in the upstream project (`voltcraft.ts:11`); the primary path is exercised by synthetic `TestData` frames but not confirmed against a real VC800/VC900.
-- The secondary display (`bytes[6..11]`) and the secondary-active header bit (symbols bit 12) are parsed for framing but never surfaced — the engine has no secondary-display field (`voltcraft.ts:27-28`).
-- The power-measurement flags byte (`bytes[14]`) and `hvWarning`/`peakMax`/`peakMin` are not represented in the surfaced reading and are hard-coded `false` (`voltcraft.ts:238-240`).
-- `PREFIX` supports `p`/`G` but `unitInfo()` does not normalize them, so a pico/giga-prefixed reading would not be SI-normalized — believed harmless for the V/A/Ω/F ranges these meters use, but unconfirmed.
-- The framer's split/coalesced-notification handling is defensive; in practice one notification equals one frame, so multi-frame resync is untested against real traffic.
+**Still not verified / future work:**
+
+- **Physical hardware.** This is an app/emulator bench test, not a real-meter capture — hence `app-verified` rather than `live-tested`.
+- **The secondary display** (`bytes[6..11]`, gear bit 12) is parsed only by the app, not surfaced by this driver.
+- **The VC800 / R2W 6-byte protocol** is a separate protocol, not handled by this driver.
+- The extended gear codes ≥14 (Power/PF/4-20mA/AC+DC/Motor/Solar) were not swept; the 5-bit field can hold them but they need the secondary block / special parsers — out of scope.
+- The framer's split/coalesced-notification handling is defensive; in practice one notification equals one frame.
 
 ## Source
 
 - Driver: `packages/protocol/src/drivers/voltcraft.ts` (`decodeVoltcraft`, `looksLikeVoltcraftFrame`, `VoltcraftFramer`)
+- Tests: `packages/protocol/src/drivers/voltcraft.test.ts` (vectors derived from the worked examples + the emulator-oracle decoder)
 - Shared types: `packages/protocol/src/drivers/types.ts` (`Driver`/`DriverFramer`), `packages/protocol/src/types.ts` (`Reading`, `unitInfo`)
-- Upstream: `webspiderteam/Bluetooth-DMM-For-Windows` — `Utilities.cs` `VoltcraftDecode` (dispatched for `isBDM == 5` in `ParseGattValue`); verified vs synthetic `TestData(dev_type == 9, …)` frames; reverse-engineered with annotations by user FireBird3314.
+- Ground truth: the official Voltcraft series800 app (OWON `com.owon.imeter`), verified via the `fake-ble-meter` BLE emulator oracle (`tests/decode_voltcraft.py` = the R10W parser port; `fakemeter/profiles/voltcraft.py` = the matching encoder). Confirmed live 2026-06-10.

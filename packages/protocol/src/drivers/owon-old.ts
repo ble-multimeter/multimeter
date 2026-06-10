@@ -4,20 +4,25 @@
 // collision via `looksLikeOwonOldFrame` below).
 //
 // Ported from webspiderteam/Bluetooth-DMM-For-Windows `Decoders/DecoderOwon.cs`
-// (`b35tDecodeOld`). Verified against the synthetic `TestData(dev_type == 5, …)` frames in
-// `Utilities.cs` — but NOT bench-tested on physical hardware, so `verification` is
-// 'ported-unverified' (PLAN §6 "Verification honesty").
+// (`b35tDecodeOld`), then validated byte-exact against the official OWON Multimeter BLE4.0 app's
+// `handleReceivedData_B35` decoder via the fake-ble-meter emulator oracle (a hardware-free bench
+// test). That validation fixed two real bugs vs. the third-party C# port: byte6 is an ASCII
+// decimal-point digit (not a bitmask), and the nano prefix is byte8 bit1 (not byte10 bit2). So
+// `verification` is 'app-verified' — decode-verified against the vendor app, not yet live on a
+// physical meter (the OWON app couldn't render this meter live due to its own CCCD bug).
 //
 // Frame format — unlike its XOR-scrambled bdm sibling, owon-old streams *plain ASCII*:
 //   * 14 bytes, one notification == one frame, terminated by CR LF (0x0D 0x0A).
 //   * byte 0 : sign — '+' (0x2B/43) or '-' (0x2D/45).
 //   * bytes 1..4 : four ASCII value digits '0'..'9'; '?' in the outer positions means OL.
 //   * byte 5 : a literal space (0x20/32).
-//   * byte 6 : decimal-point position. (byte6 & 0x07) read as a 4-bit field, the index of its
-//              first set bit = number of digits after the point (0 → none).
+//   * byte 6 : decimal-point position, an ASCII DIGIT (NOT a bitmask) — the vendor app's
+//              `handleReceivedData_B35` switches on the char: '1'(0x31)→3 decimals,
+//              '2'(0x32)→2, '4'(0x34)→1, anything else→0.
 //   * byte 7 : mode bitfield — hold/rel/AC/DC/auto.
-//   * byte 8 : min/max + battery bitfield.
-//   * byte 9, byte 10 : scale-prefix + unit bitfields (assembled into "mV", "kΩ", "µA", "nF", …).
+//   * byte 8 : min/max + battery bitfield, plus the nano prefix (bit1, BIT_NANO).
+//   * byte 9, byte 10 : scale-prefix (m/µ/M/k) + unit bitfields (assembled into "mV", "kΩ",
+//                       "µA", "nF", …). The nano prefix is NOT here — it's byte 8 bit 1.
 //   * byte 11 : a vendor status/checksum byte (not decoded).
 //   * bytes 12..13 : CR LF.
 
@@ -102,11 +107,9 @@ export function decodeOwonOld(bytes: Uint8Array, ts = 0): Reading {
   // Sign (source: only '-' / dec 45 flips it; anything else is positive).
   let text = bytes[0] === SIGN_MINUS ? '-' : '';
 
-  // Decimal-point position: (byte6 & 0x07) as a 4-bit field, index of its first set bit =
-  // digits after the point. 0b000 → index -1 → point 0 (no decimal point).
-  const pointBits = (bytes[6]! & 0x07).toString(2).padStart(4, '0');
-  let point = pointBits.indexOf('1');
-  if (point < 0) point = 0;
+  // Decimal-point position: byte6 is an ASCII digit (app `handleReceivedData_B35` switches on
+  // the char), NOT a bitmask. '1'(0x31)→3 decimals, '2'(0x32)→2, '4'(0x34)→1, else→0.
+  const point = bytes[6] === 0x31 ? 3 : bytes[6] === 0x32 ? 2 : bytes[6] === 0x34 ? 1 : 0;
 
   // Four ASCII value digits. The source's OL sentinel is the outer chars being '?'.
   let digits = String.fromCharCode(bytes[1]!, bytes[2]!, bytes[3]!, bytes[4]!);
@@ -134,12 +137,13 @@ export function decodeOwonOld(bytes: Uint8Array, ts = 0): Reading {
   const diode = isBitSet(bytes[9]!, 2);
   const cont = isBitSet(bytes[9]!, 3);
 
-  // Assembled in the source's exact order so prefixes land before the base unit. Note "n"
-  // (nano, capacitance) is only emitted when no other byte-9 prefix is present (data[9] == 0).
+  // Assembled in the source's exact order so prefixes land before the base unit. The nano ("n")
+  // prefix lives in byte 8 bit 1 (the vendor app's BIT_NANO), an annunciator independent of the
+  // farad bit — NOT byte10 bit2 gated on byte9 (the earlier C#-port assumption was wrong).
   let displayUnit = '';
   if (isBitSet(bytes[10]!, 1)) displayUnit += '°C';
   if (isBitSet(bytes[10]!, 0)) displayUnit += '°F';
-  if (isBitSet(bytes[10]!, 2) && bytes[9] === 0) displayUnit += 'n';
+  if (isBitSet(bytes[8]!, 1)) displayUnit += 'n';
   if (isBitSet(bytes[9]!, 6)) displayUnit += 'm';
   if (isBitSet(bytes[9]!, 7)) displayUnit += 'µ';
   if (isBitSet(bytes[9]!, 4)) displayUnit += 'M';
@@ -257,7 +261,7 @@ const FFF3_WRITE = '0000fff3-0000-1000-8000-00805f9b34fb';
 export const owonOld: Driver = {
   id: 'owon-old',
   label: 'Owon B35T (legacy)',
-  verification: 'ported-unverified',
+  verification: 'app-verified',
   // OWON legacy meters advertise inconsistent names; discovery leans on the 0xFFF0 service
   // filter (shared with bdm/owon-plus/voltcraft — the orchestrator disambiguates via
   // looksLikeOwonOldFrame once frames arrive), with name prefixes as hints.

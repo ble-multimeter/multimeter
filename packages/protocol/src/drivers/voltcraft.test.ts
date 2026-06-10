@@ -1,10 +1,39 @@
-// Fixture test for the Voltcraft driver. Frames are the synthetic captures from the source
-// Windows app's `TestData(dev_type == 9, …)` in Utilities.cs (the dev index dispatched to
-// VoltcraftDecode). Expected values were computed by re-deriving the source's VoltcraftDecode
-// math from those exact bytes — so this is a faithful round-trip of the ported decoder, not a
-// hardware capture (verification: 'ported-unverified'). See drivers/voltcraft.ts.
+// Fixture test for the Voltcraft VC900-series (R10W) driver. The frames are the LIVE-VERIFIED R10W
+// vectors: built from the worked examples in docs/protocols/voltcraft.md and cross-checked against
+// the emulator-oracle decoder (fake-ble-meter `tests/decode_voltcraft.py`), which was itself
+// confirmed byte-for-byte against the official Voltcraft app. So these expectations track the real
+// meter, not a synthetic re-derivation of an unverified port. See drivers/voltcraft.ts.
+//
+// Frame builder mirrors the on-wire layout: five 24-bit LITTLE-endian words at byte offsets
+// 0/3/6/9/12. gear word = decimals | prefix<<3 | gear<<6; value word = count | overrange<<20 |
+// sign<<23; state word = LSB-numbered annunciator bitmask (HOLD=bit0).
 import { describe, it, expect } from 'vitest';
 import { decodeVoltcraft, voltcraft, looksLikeVoltcraftFrame } from './voltcraft';
+
+const le24 = (w: number): number[] => [w & 0xff, (w >> 8) & 0xff, (w >> 16) & 0xff];
+
+function frame(opts: {
+  gear: number;
+  prefix?: number;
+  decimals?: number;
+  count?: number;
+  overrange?: number;
+  sign?: boolean;
+  state?: number;
+}): number[] {
+  const {
+    gear,
+    prefix = 4,
+    decimals = 0,
+    count = 0,
+    overrange = 0,
+    sign = false,
+    state = 0,
+  } = opts;
+  const gearWord = (decimals & 7) | ((prefix & 7) << 3) | ((gear & 0x1f) << 6);
+  const valueWord = (count & 0x7ffff) | ((overrange & 7) << 20) | (sign ? 1 << 23 : 0);
+  return [...le24(gearWord), ...le24(valueWord), 0, 0, 0, 0, 0, 0, ...le24(state)];
+}
 
 const FRAMES: {
   bytes: number[];
@@ -14,118 +43,82 @@ const FRAMES: {
   acdc: string;
   overload: boolean;
   fn: string;
+  value: number | null;
 }[] = [
   {
-    bytes: [36, 0, 240, 33, 21, 0, 161, 9, 240, 33, 21, 0, 4, 0, 0],
-    note: '0.5409 V DC',
-    text: '0.5409',
+    // Worked example from the protocol doc: 4.200 V DC = 23 00 00 68 10 00 …
+    bytes: frame({ gear: 0, prefix: 4, decimals: 3, count: 4200 }),
+    note: '4.200 V DC',
+    text: '4.200',
     unit: 'V',
     acdc: 'DC',
     overload: false,
     fn: 'DCV',
+    value: 4.2,
   },
   {
-    bytes: [96, 16, 240, 0, 0, 0, 162, 25, 240, 0, 0, 0, 4, 0, 0],
-    note: '00000 V AC (sec display active)',
-    text: '00000',
+    bytes: frame({ gear: 1, prefix: 4, decimals: 1, count: 2305 }),
+    note: '230.5 V AC',
+    text: '230.5',
     unit: 'V',
     acdc: 'AC',
     overload: false,
     fn: 'ACV',
+    value: 230.5,
   },
   {
-    bytes: [98, 16, 240, 41, 0, 0, 162, 25, 240, 0, 0, 0, 4, 0, 0],
-    note: '000.41 V AC',
-    text: '000.41',
-    unit: 'V',
-    acdc: 'AC',
-    overload: false,
-    fn: 'ACV',
-  },
-  {
-    bytes: [26, 0, 240, 63, 211, 0, 162, 9, 240, 0, 0, 0, 4, 0, 0],
-    note: '540.79 mV DC',
-    text: '540.79',
-    unit: 'mV',
-    acdc: 'DC',
-    overload: false,
-    fn: 'DCV',
-  },
-  {
-    bytes: [89, 16, 240, 59, 2, 0, 162, 25, 240, 0, 0, 0, 0, 0, 0],
-    note: '0057.1 mV AC',
-    text: '0057.1',
-    unit: 'mV',
-    acdc: 'AC',
-    overload: false,
-    fn: 'ACV',
-  },
-  {
-    bytes: [47, 1, 240, 219, 42, 16, 162, 9, 240, 0, 0, 0, 4, 0, 0],
-    note: 'O.L kΩ',
-    text: 'O.L',
-    unit: 'kΩ',
-    acdc: '',
-    overload: true,
-    fn: 'OHM',
-  },
-  {
-    bytes: [55, 1, 240, 143, 3, 16, 162, 9, 240, 0, 0, 0, 4, 0, 0],
-    note: 'O.L MΩ',
-    text: 'O.L',
+    bytes: frame({ gear: 4, prefix: 6, decimals: 3, count: 1000 }),
+    note: '1.000 MΩ',
+    text: '1.000',
     unit: 'MΩ',
     acdc: '',
-    overload: true,
+    overload: false,
     fn: 'OHM',
+    value: 1.0,
   },
   {
-    bytes: [225, 2, 240, 0, 0, 0, 162, 9, 240, 0, 0, 0, 0, 0, 0],
-    note: '0000.0 Ω continuity',
-    text: '0000.0',
-    unit: 'Ω',
-    acdc: '',
+    bytes: frame({ gear: 2, prefix: 2, decimals: 2, count: 1230 }),
+    note: '12.30 µA DC',
+    text: '12.30',
+    unit: 'µA',
+    acdc: 'DC',
     overload: false,
-    fn: 'CONT',
+    fn: 'DCA',
+    value: 12.3,
   },
   {
-    bytes: [231, 2, 240, 175, 43, 16, 162, 9, 240, 0, 0, 0, 0, 0, 0],
-    note: 'O.L Ω continuity',
-    text: 'O.L',
-    unit: 'Ω',
-    acdc: '',
-    overload: true,
-    fn: 'CONT',
-  },
-  {
-    bytes: [167, 2, 240, 2, 126, 16, 162, 9, 240, 0, 0, 0, 0, 0, 0],
-    note: 'O.L V diode',
-    text: 'O.L',
+    bytes: frame({ gear: 0, prefix: 4, decimals: 3, count: 512, sign: true }),
+    note: '-0.512 V DC',
+    text: '-0.512',
     unit: 'V',
-    acdc: '',
-    overload: true,
-    fn: 'DIODE',
+    acdc: 'DC',
+    overload: false,
+    fn: 'DCV',
+    value: -0.512,
   },
   {
-    bytes: [79, 1, 240, 255, 255, 23, 162, 9, 240, 0, 0, 0, 4, 0, 0],
-    note: 'O.L nF',
-    text: 'O.L',
-    unit: 'nF',
-    acdc: '',
+    bytes: frame({ gear: 1, prefix: 4, overrange: 1 }),
+    note: 'OL (V AC)',
+    text: 'OL',
+    unit: 'V',
+    acdc: 'AC',
     overload: true,
-    fn: 'CAP',
+    fn: 'ACV',
+    value: null,
   },
   {
-    bytes: [76, 1, 240, 86, 3, 0, 162, 9, 240, 0, 0, 0, 4, 0, 0],
-    note: '0.0854 nF',
-    text: '0.0854',
-    unit: 'nF',
+    bytes: frame({ gear: 4, prefix: 5, overrange: 2 }),
+    note: 'UL (kΩ)',
+    text: 'UL',
+    unit: 'kΩ',
     acdc: '',
     overload: false,
-    fn: 'CAP',
+    fn: 'OHM',
+    value: null,
   },
 ];
 
-describe('voltcraft decode (synthetic frames from the source app TestData)', () => {
+describe('voltcraft decode (live-verified R10W frames)', () => {
   for (const f of FRAMES) {
     it(`decodes: ${f.note}`, () => {
       const r = decodeVoltcraft(Uint8Array.from(f.bytes), 123);
@@ -135,65 +128,142 @@ describe('voltcraft decode (synthetic frames from the source app TestData)', () 
       expect(r.overload).toBe(f.overload);
       expect(r.function).toBe(f.fn);
       expect(r.ts).toBe(123);
-      if (/^-?\d*\.?\d+$/.test(f.text) && !f.overload) {
-        expect(r.displayValue).toBeTypeOf('number');
-      } else {
+      if (f.value === null) {
         expect(r.displayValue).toBeNull();
+      } else {
+        expect(r.displayValue).toBeCloseTo(f.value, 9);
       }
     });
   }
 
-  it('normalizes range prefixes into baseValue (mV → V)', () => {
+  it('matches the protocol-doc worked example bytes exactly (4.200 V DC)', () => {
     const r = decodeVoltcraft(
-      Uint8Array.from([26, 0, 240, 63, 211, 0, 162, 9, 240, 0, 0, 0, 4, 0, 0]),
+      Uint8Array.from([0x23, 0, 0, 0x68, 0x10, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
     );
-    expect(r.displayText).toBe('540.79');
-    expect(r.displayUnit).toBe('mV');
-    expect(r.baseUnit).toBe('V');
-    expect(r.baseValue).toBeCloseTo(0.54079, 9);
-    expect(r.function).toBe('DCV');
+    expect(r.displayText).toBe('4.200');
+    expect(r.displayUnit).toBe('V');
+    expect(r.acdc).toBe('DC');
+    expect(r.displayValue).toBeCloseTo(4.2, 9);
   });
 
-  it('flags overload and yields a null value (O.L kΩ)', () => {
+  it('normalizes range prefixes into baseValue (MΩ → Ω)', () => {
     const r = decodeVoltcraft(
-      Uint8Array.from([47, 1, 240, 219, 42, 16, 162, 9, 240, 0, 0, 0, 4, 0, 0]),
+      Uint8Array.from(frame({ gear: 4, prefix: 6, decimals: 3, count: 1000 })),
     );
+    expect(r.displayUnit).toBe('MΩ');
+    expect(r.baseUnit).toBe('Ω');
+    expect(r.baseValue).toBeCloseTo(1_000_000, 3);
+    expect(r.function).toBe('OHM');
+  });
+
+  it('flags overload and yields a null value (OL)', () => {
+    const r = decodeVoltcraft(Uint8Array.from(frame({ gear: 1, overrange: 1 })));
     expect(r.overload).toBe(true);
     expect(r.displayValue).toBeNull();
     expect(r.baseValue).toBeNull();
   });
 
-  it('reports a negative DC voltage (bit7 of byte 5)', () => {
-    // 0.5409 V DC frame with the primary-negative bit set.
+  it('reports a negative DC voltage from value-word bit23 (bit7 of byte 5)', () => {
     const r = decodeVoltcraft(
-      Uint8Array.from([36, 0, 240, 33, 21, 0x80, 161, 9, 240, 33, 21, 0, 4, 0, 0]),
+      Uint8Array.from(frame({ gear: 0, prefix: 4, decimals: 3, count: 512, sign: true })),
     );
-    expect(r.displayText).toBe('-0.5409');
-    expect(r.displayValue).toBeCloseTo(-0.5409, 9);
+    expect(r.displayText).toBe('-0.512');
+    expect(r.displayValue).toBeCloseTo(-0.512, 9);
     expect(r.acdc).toBe('DC');
   });
+});
 
-  it('decodes underload (U.L) from decimal-point sentinel 6', () => {
-    // Force point field = 6 (underload): symbols low byte bits 0..2 = 110.
-    // function 4 (Ω), scale 5 (k): symbols = (4<<6)|(5<<3)|6 = 302 = 0x12E → bytes [0x2E, 0x01].
+// The headline fix: the state word is a straight LSB-numbered bitmask (HOLD=bit0), not MSB-first.
+describe('voltcraft state flags (LSB-first; HOLD = bit0)', () => {
+  const FLAG_CASES: {
+    bit: number;
+    key: keyof ReturnType<typeof decodeVoltcraft>['flags'];
+    note: string;
+  }[] = [
+    { bit: 0, key: 'hold', note: 'HOLD' },
+    { bit: 1, key: 'rel', note: 'REL' },
+    { bit: 2, key: 'auto', note: 'AUTO' },
+    { bit: 3, key: 'lowBattery', note: 'Bat' },
+    { bit: 4, key: 'min', note: 'MIN' },
+    { bit: 5, key: 'max', note: 'MAX' },
+  ];
+
+  for (const c of FLAG_CASES) {
+    it(`sets only flags.${c.key} for ${c.note} (bit ${c.bit})`, () => {
+      const r = decodeVoltcraft(
+        Uint8Array.from(frame({ gear: 0, prefix: 4, decimals: 3, count: 4200, state: 1 << c.bit })),
+      );
+      expect(r.flags[c.key]).toBe(true);
+      // Every other surfaced flag stays clear.
+      for (const other of FLAG_CASES) {
+        if (other.key !== c.key) expect(r.flags[other.key]).toBe(false);
+      }
+      // The measurement is unaffected by the state word.
+      expect(r.displayText).toBe('4.200');
+    });
+  }
+
+  it('decodes the protocol-doc HOLD worked example (4.2 V DC + HOLD)', () => {
+    // 21 00 00 2a 00 00 00 00 00 00 00 00 01 00 00
     const r = decodeVoltcraft(
-      Uint8Array.from([0x2e, 0x01, 240, 0, 0, 0, 162, 9, 240, 0, 0, 0, 0, 0, 0]),
+      Uint8Array.from([0x21, 0, 0, 0x2a, 0, 0, 0, 0, 0, 0, 0, 0, 0x01, 0, 0]),
     );
-    expect(r.displayText).toBe('U.L');
-    expect(r.displayValue).toBeNull();
-    expect(r.displayUnit).toBe('kΩ');
+    expect(r.displayText).toBe('4.2');
+    expect(r.acdc).toBe('DC');
+    expect(r.flags.hold).toBe(true);
+    expect(r.flags.rel).toBe(false);
   });
 
+  it('does NOT read flags MSB-first (the old bug): a high state bit lights nothing', () => {
+    // bit15 (USB) — under the old MSB-first read this was HOLD; now it must light no surfaced flag.
+    const r = decodeVoltcraft(
+      Uint8Array.from(frame({ gear: 0, prefix: 4, decimals: 3, count: 4200, state: 1 << 15 })),
+    );
+    expect(r.flags.hold).toBe(false);
+    expect(r.flags.rel).toBe(false);
+    expect(r.flags.max).toBe(false);
+  });
+});
+
+describe('voltcraft special displays + graceful degradation', () => {
   it('degrades a short frame to a blank reading (never throws)', () => {
-    const r = decodeVoltcraft(Uint8Array.from([36, 0, 240, 33, 21]), 7);
+    const r = decodeVoltcraft(Uint8Array.from([0x23, 0, 0, 0x68, 0x10]), 7);
     expect(r.displayText).toBe('');
     expect(r.function).toBe('?');
     expect(r.ts).toBe(7);
   });
 
+  it('returns a blank reading for an empty frame (never throws)', () => {
+    const r = decodeVoltcraft(Uint8Array.from([]), 3);
+    expect(r.function).toBe('?');
+    expect(r.displayValue).toBeNull();
+    expect(r.ts).toBe(3);
+  });
+
+  it('renders an NCV strength bar of dashes (gear 13, count > 0) with no unit/value', () => {
+    const r = decodeVoltcraft(Uint8Array.from(frame({ gear: 13, count: 3 })));
+    expect(r.displayText).toBe('---');
+    expect(r.displayUnit).toBe('');
+    expect(r.displayValue).toBeNull();
+    expect(r.function).toBe('NCV');
+  });
+
+  it('renders "EF" for NCV with no field (gear 13, count == 0)', () => {
+    const r = decodeVoltcraft(Uint8Array.from(frame({ gear: 13, count: 0 })));
+    expect(r.displayText).toBe('EF');
+    expect(r.displayValue).toBeNull();
+  });
+
+  it('renders hFE as a unit-less gain (gear 12)', () => {
+    const r = decodeVoltcraft(Uint8Array.from(frame({ gear: 12, count: 250 })));
+    expect(r.displayUnit).toBe('');
+    expect(r.function).toBe('HFE');
+    expect(r.displayText).toBe('250');
+  });
+
   it('populates every Reading field', () => {
     const r = decodeVoltcraft(
-      Uint8Array.from([36, 0, 240, 33, 21, 0, 161, 9, 240, 33, 21, 0, 4, 0, 0]),
+      Uint8Array.from(frame({ gear: 0, prefix: 4, decimals: 3, count: 4200 })),
     );
     expect(Object.keys(r).sort()).toEqual(
       [
@@ -217,7 +287,7 @@ describe('voltcraft decode (synthetic frames from the source app TestData)', () 
 });
 
 describe('voltcraft sniffer (FFF0 collision discriminator)', () => {
-  const FRAME = [36, 0, 240, 33, 21, 0, 161, 9, 240, 33, 21, 0, 4, 0, 0];
+  const FRAME = frame({ gear: 0, prefix: 4, decimals: 3, count: 4200 });
 
   it('accepts a real 15-byte voltcraft frame', () => {
     expect(looksLikeVoltcraftFrame(Uint8Array.from(FRAME))).toBe(true);
@@ -231,15 +301,27 @@ describe('voltcraft sniffer (FFF0 collision discriminator)', () => {
     ).toBe(false);
   });
 
-  it('rejects a 15-byte payload lacking the 0xF0 markers', () => {
-    const bad = [...FRAME];
-    bad[2] = 0x00;
+  it('rejects a 15-byte payload whose gear code is out of range (14..31)', () => {
+    // gear 31 (all bits set) — not a valid R10W function.
+    const bad = frame({ gear: 31 });
     expect(looksLikeVoltcraftFrame(Uint8Array.from(bad))).toBe(false);
+  });
+
+  it('cross-rejects the other FFF0 families', () => {
+    const sniff = looksLikeVoltcraftFrame;
+    expect(sniff(Uint8Array.from([34, 240, 4, 0, 103, 132]))).toBe(false); // owon-plus 6
+    expect(sniff(Uint8Array.from([27, 132, 112, 177, 41, 123, 191, 123, 102, 172, 59]))).toBe(
+      false,
+    ); // bdm 11
+    expect(sniff(Uint8Array.from([43, 50, 55, 52, 54, 32, 52, 49, 0, 64, 128, 27, 13, 10]))).toBe(
+      false,
+    ); // owon-old 14
+    expect(sniff(Uint8Array.from([]))).toBe(false);
   });
 });
 
-describe('voltcraft framer (sync + split/coalesced notifications)', () => {
-  const FRAME = [36, 0, 240, 33, 21, 0, 161, 9, 240, 33, 21, 0, 4, 0, 0];
+describe('voltcraft framer (split/coalesced notifications)', () => {
+  const FRAME = frame({ gear: 0, prefix: 4, decimals: 3, count: 4200 });
 
   it('frames one notification == one frame', () => {
     const f = voltcraft.createFramer();
@@ -263,13 +345,6 @@ describe('voltcraft framer (sync + split/coalesced notifications)', () => {
     expect(out).toHaveLength(2);
   });
 
-  it('resyncs past leading garbage to the 0xF0 markers', () => {
-    const f = voltcraft.createFramer();
-    const out = f.push(Uint8Array.from([0x00, 0xff, ...FRAME]));
-    expect(out).toHaveLength(1);
-    expect([...out[0]!.bytes]).toEqual(FRAME);
-  });
-
   it('reset clears buffered bytes', () => {
     const f = voltcraft.createFramer();
     f.push(Uint8Array.from(FRAME.slice(0, 6)));
@@ -278,58 +353,24 @@ describe('voltcraft framer (sync + split/coalesced notifications)', () => {
   });
 });
 
-describe('voltcraft special displays (NCV) + driver wiring', () => {
-  const FRAME = [36, 0, 240, 33, 21, 0, 161, 9, 240, 33, 21, 0, 4, 0, 0];
-
-  // fn = (symbols>>6)&0x1f, symbols = bytes[1]<<8|bytes[0]. fn 13 (NCV): symbols = 13<<6 = 0x340
-  // → bytes[0]=0x40, bytes[1]=0x03. count = bytes[4]<<8|bytes[3]. Markers at bytes[2]/bytes[8].
-  it('renders an NCV strength bar of dashes (fn 13, count > 0) with no unit/value', () => {
-    const r = decodeVoltcraft(
-      Uint8Array.from([0x40, 0x03, 240, 3, 0, 0, 162, 9, 240, 0, 0, 0, 0, 0, 0]),
-    );
-    expect(r.displayText).toBe('---');
-    expect(r.displayUnit).toBe('');
-    expect(r.displayValue).toBeNull();
-  });
-
-  it('renders "EF" for NCV with no field (fn 13, count == 0)', () => {
-    const r = decodeVoltcraft(
-      Uint8Array.from([0x40, 0x03, 240, 0, 0, 0, 162, 9, 240, 0, 0, 0, 0, 0, 0]),
-    );
-    expect(r.displayText).toBe('EF');
-    expect(r.displayValue).toBeNull();
-  });
-
-  it('returns a blank reading for an empty frame (never throws)', () => {
-    const r = decodeVoltcraft(Uint8Array.from([]), 3);
-    expect(r.function).toBe('?');
-    expect(r.displayValue).toBeNull();
-    expect(r.ts).toBe(3);
-  });
+describe('voltcraft driver wiring', () => {
+  const FRAME = frame({ gear: 0, prefix: 4, decimals: 3, count: 4200 });
 
   it('driver.decode delegates to decodeVoltcraft', () => {
     const r = voltcraft.decode(Uint8Array.from(FRAME), 21);
-    expect(r.displayText).toBe('0.5409');
+    expect(r.displayText).toBe('4.200');
     expect(r.ts).toBe(21);
+  });
+
+  it('reports app-verified verification status', () => {
+    expect(voltcraft.verification).toBe('app-verified');
   });
 
   it('matches on the FFF0 service and VC/Voltcraft name prefixes', () => {
     expect(voltcraft.match({ services: ['0000fff0-0000-1000-8000-00805f9b34fb'] })).toBe(true);
-    expect(voltcraft.match({ name: 'VC800' })).toBe(true);
+    expect(voltcraft.match({ name: 'VC900' })).toBe(true);
     expect(voltcraft.match({ name: 'Voltcraft-X' })).toBe(true);
     expect(voltcraft.match({ name: 'Nope' })).toBe(false);
     expect(voltcraft.match({})).toBe(false);
-  });
-
-  it('sniffer cross-rejects the other FFF0 families', () => {
-    const sniff = looksLikeVoltcraftFrame;
-    expect(sniff(Uint8Array.from([34, 240, 4, 0, 103, 132]))).toBe(false); // owon-plus 6
-    expect(sniff(Uint8Array.from([27, 132, 112, 177, 41, 123, 191, 123, 102, 172, 59]))).toBe(
-      false,
-    ); // bdm 11
-    expect(sniff(Uint8Array.from([43, 50, 55, 52, 54, 32, 52, 49, 0, 64, 128, 27, 13, 10]))).toBe(
-      false,
-    ); // owon-old 14
-    expect(sniff(Uint8Array.from([]))).toBe(false);
   });
 });

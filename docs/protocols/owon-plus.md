@@ -1,6 +1,6 @@
 # Owon "plus" (B35T+ / B41T+ / OW18E / CM2100B) — `owon-plus`
 
-> **State:** `untested` (ported, not bench-tested; Owon OW18E ordered to validate). **Driver:** `packages/protocol/src/drivers/owon-plus.ts`. **Source:** ported from `webspiderteam/Bluetooth-DMM-For-Windows` `Utilities.cs` `owonPlusTypeDecode` (`isBDM == 2` / `TestDevice == 6`).
+> **State:** `app-verified` — decode-verified byte-exact against the official "OWON Multimeter BLE4.0" Android app (`handleReceivedData_common`) via the `fake-ble-meter` emulator oracle (a hardware-free bench test), **not yet live on a physical meter** (the OWON app could not render this meter live due to its own CCCD bug; Owon OW18E ordered to validate). **No driver bug was found** — the scale/function nibbles, SI-prefix + unit tables, and the LSB-first flag order (fixed earlier in commit 4506bdc) all match the app. **Driver:** `packages/protocol/src/drivers/owon-plus.ts`. **Source:** ported from `webspiderteam/Bluetooth-DMM-For-Windows` `Utilities.cs` `owonPlusTypeDecode` (`isBDM == 2` / `TestDevice == 6`), confirmed against the app.
 
 <a name="overview"></a>
 
@@ -137,20 +137,22 @@ Index 4 (`""`) is the unscaled base unit.
 
 `overload` is `true` when `point === 6 || point === 7` (`owon-plus.ts:184`).
 
-### Mode flag bits (string-index decode)
+### Mode flag bits (LSB-first, per the vendor app)
 
-`mode = (data[3] << 8 | data[2]) & 0xffff` (`owon-plus.ts:163`). The source renders this word as a **16-char binary string, MSB first**, and indexes it positionally. So string index `i` maps to numeric bit `(15 - i)` of the word — `strBit(i) = ((mode >> (15 - i)) & 1) === 1` (`owon-plus.ts:164`).
+`mode = (data[3] << 8 | data[2]) & 0xffff` (`owon-plus.ts:163`). The word is a bitfield numbered **LSB-first**: flag `n` lives at bit `n` — `bit(n) = ((mode >> n) & 1) === 1` (`owon-plus.ts:164`).
 
-| String index `i` | Numeric bit | Flag | `Reading.flags` |
-| --- | --- | --- | --- |
-| 0 | 15 | HOLD | `hold` (`:165`) |
-| 1 | 14 | REL | `rel` (`:166`) |
-| 2 | 13 | AUTO (autorange) | `auto` (`:167`) |
-| 3 | 12 | Battery low | `lowBattery` (`:168`) |
-| 4 | 11 | MIN | `min` (`:169`) |
-| 5 | 10 | MAX | `max` (`:170`) |
+| Bit | Flag | `Reading.flags` |
+| --- | --- | --- |
+| 0 | HOLD | `hold` (`:165`) |
+| 1 | REL | `rel` (`:166`) |
+| 2 | AUTO (autorange) | `auto` (`:167`) |
+| 3 | Battery low | `lowBattery` (`:168`) |
+| 4 | MIN | `min` (`:169`) |
+| 5 | MAX | `max` (`:170`) |
 
-> **Authoritative behaviour:** This MSB-first string-index decode is the behaviour of the *dispatched* C# `owonPlusTypeDecode`. It is **not** the LSB-first numbering shown in the inline `enum` comment in the original Android source — the C# does not follow that, and the C# is authoritative here (`owon-plus.ts:159-162`).
+The full bit map from the vendor app's `MultimeterClient.Status` enum is: `HOLD(0), REL(1), AUTO(2), Bat(3), MIN(4), MAX(5), OL(6), RMR(7), PMIN(8), PMAX(9), UL(10), LPF0(11), LPF1(12), VBAR(13)`.
+
+> **Verified against the OWON Android app (BLE4.0 v1.6.7.0).** `handleReceivedData_common` builds `Integer.toBinaryString(mode)` and right-aligns it against the `Status` enum array (whose last element is `HOLD`), so HOLD = bit 0. This **corrects an earlier port** that indexed an MSB-first padded string and placed HOLD at bit 15 — that reading was wrong for real hardware. The vendor Android app is authoritative; the third-party C# Windows app is not.
 
 Flags **not** surfaced by `owonPlusTypeDecode` and therefore hard-coded `false`:
 - `peakMax` / `peakMin` (`owon-plus.ts:171-173`, `:212-213`)
@@ -201,18 +203,18 @@ When `bytes.length < 6`, decode returns `blank(ts)` (`owon-plus.ts:108`, `:40-64
 
 ## Verification
 
-`verification: 'ported-unverified'` (`owon-plus.ts:267`); UI state **untested**. Nothing in this driver has been confirmed against physical hardware (an Owon OW18E is ordered to validate).
+`verification: 'app-verified'` (`owon-plus.ts`). The decoder is validated **byte-exact against the vendor app's `handleReceivedData_common`** via the `fake-ble-meter` emulator oracle (a hardware-free bench test) — decode-verified, **not** yet live on a physical meter (the OWON app could not render this meter live due to its own CCCD bug; an Owon OW18E is ordered to validate live). **No driver bug was found** in this pass — unlike its `owon-old` sibling, owon-plus already matched the app.
 
-What is **inferred** from the C# source rather than observed:
+Confirmed byte-exact against the app (`handleReceivedData_common`, `MultimeterClient.java:1236+`):
 
-- The entire 6-byte frame layout and the three-word packing.
-- The function code table (0..13) and the SI prefix table.
-- **The MSB-first string-index flag decode is the authoritative C# behaviour** — chosen deliberately over the LSB-first numbering in the inline Android `enum` comment (`owon-plus.ts:159-162`). If hardware shows the flags are mis-mapped, this is the first place to re-check.
+- The 6-byte frame layout and the three-word packing.
+- The `scale = (symbols & 56) >> 3` SI-prefix index (`p n u m None K M G`) and the `function = (symbols & 960) >> 6` function nibble (0..13) with its per-function unit table — **identical** to the app's two `switch` statements. Caveat: fn 13 is `NCV` only on the OW18/OW20/OW55 series and `ADP` elsewhere; this driver targets the OW18E family, so `NCV` is correct.
+- **The flag bit order is LSB-first (HOLD = bit 0)** — the app builds `Integer.toBinaryString(mode)` and right-aligns it against the `Status` enum array, so flag `n` is at bit `n`. This corrected an earlier MSB-first port (HOLD = bit 15) in commit 4506bdc; the app confirms LSB-first.
 - The `point == 6 → "U.L"` / `point == 7 → "O.L"` overload sentinels.
 - The NCV dash-bar / `EF` rendering and the hFE bare-gain display.
 - The negative-zero quirk (`raw == 0x8000` → unsigned `"0000"`).
 
-The pure `decodeOwonPlus` / `looksLikeOwonPlusFrame` functions are unit-tested (no I/O), but the byte-level protocol assumptions remain unconfirmed on hardware.
+The pure `decodeOwonPlus` / `looksLikeOwonPlusFrame` functions are unit-tested (no I/O). Live-on-hardware validation is still pending (the OW18E).
 
 ## Source
 

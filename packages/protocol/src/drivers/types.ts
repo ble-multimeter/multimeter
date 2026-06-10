@@ -58,9 +58,13 @@ export type MeterControl =
 export interface Driver {
   id: string; // 'uni-t'
   label: string; // 'UNI-T BLE'
-  // Live-verified on real hardware vs. ported from the source app and unverified (PLAN §6
-  // "Verification honesty"). The UI surfaces this rather than implying all are bench-tested.
-  verification: 'live-tested' | 'ported-unverified';
+  // How far the driver's decode has been validated (PLAN §6 "Verification honesty"). The UI
+  // surfaces this rather than implying all are bench-tested:
+  //   * 'live-tested'       — verified on real physical hardware.
+  //   * 'app-verified'      — verified byte-for-byte against the vendor app via a BLE emulator
+  //                           oracle (a hardware-free bench test), but not yet on a physical meter.
+  //   * 'ported-unverified' — ported from the source app / annotations, no live validation.
+  verification: 'live-tested' | 'app-verified' | 'ported-unverified';
   namePrefixes: string[]; // requestDevice name filters
   gatt: DriverGattProfile;
   match(ctx: DriverMatchContext): boolean;

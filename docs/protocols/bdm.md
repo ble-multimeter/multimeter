@@ -1,6 +1,6 @@
 # Bluetooth DMM clones (Aneng / BSIDE / ZOYI / BABATools) — `bdm`
 
-> **State:** `untested` (ported, not bench-tested; ZOYI ZT-5B + Aneng AN9002 ordered to validate). **Driver:** `packages/protocol/src/drivers/bdm.ts`. **Source:** ported from `webspiderteam/Bluetooth-DMM-For-Windows` `DecoderBluetoothDMM.cs` (`BDMDecode`, 11-byte path), verified vs 36 annotated frames in `Binary raw data.md`.
+> **State:** `untested` on hardware, but **cross-verified against the official "Bluetooth DMM" Android app** (`com.yscoco.wyboem`, APKPure v1.0.13) in addition to the C# source — see [Verification](#verification). ZOYI ZT-5B + Aneng AN9002 ordered to validate. **Driver:** `packages/protocol/src/drivers/bdm.ts`. **Source:** ported from `webspiderteam/Bluetooth-DMM-For-Windows` `DecoderBluetoothDMM.cs` (`BDMDecode`, 11-byte path), verified vs 36 annotated frames in `Binary raw data.md`.
 
 The `bdm` driver decodes a large family of rebadged "Bluetooth DMM" handheld multimeters — sold under the Aneng, BSIDE, ZOYI and BABATools brands — that all expose the same GATT layout (`DevType 0` / service `0xFFF0`) and the same on-wire frame. The meter does not handshake or answer requests; the moment a client subscribes to the notify characteristic it free-streams one 11-byte notification per LCD update. Each byte is XOR-scrambled with a fixed 11-element key; descrambling yields an 88-bit field from which four 7-segment digits, a set of unit annunciator bits, AC/DC bits, diode/continuity bits and status flags (max/min/hold/rel/auto/low-battery) are read at fixed bit offsets. There is no checksum and no sync word; framing keys off the constant first two raw bytes (`0x1B 0x84`). The driver is receive-only — it exposes no controls. Everything below is derived from `bdm.ts`; bit offsets and the descramble key are quoted directly from the code.
 
@@ -176,10 +176,42 @@ Receive-only. The driver declares no `controls` map (none in `bdm.ts:246-273`), 
 
 ## Verification
 
-`verification: 'ported-unverified'` (`bdm.ts:249`). The decoder was ported from `DecoderBluetoothDMM.cs` `BDMDecode` (the `data.Count() == 11` path) and cross-checked against the 36 annotated frames in the source repo's `Binary raw data.md` (`bdm.ts:5-8`), but it has **not** been bench-tested on physical hardware. ZOYI ZT-5B and Aneng AN9002 units have been ordered to live-validate it (per the hardware-validation plan).
+`verification: 'ported-unverified'` (`bdm.ts:249`). Two independent implementations now agree on this decoder:
 
-What is inferred / unverified:
-- Exact unit-bit semantics where the source app reuses the same `A` annunciator with two prefix banks (bits 65/66 vs 84/85) — believed correct from the annotated frames but unconfirmed on hardware.
+1. The original port from `DecoderBluetoothDMM.cs` `BDMDecode` (the `data.Count() == 11` path), cross-checked against the 36 annotated frames in the source repo's `Binary raw data.md` (`bdm.ts:5-8`).
+2. **The official "Bluetooth DMM" Android app** (`com.yscoco.wyboem`, APKPure v1.0.13) — byte-for-byte on the descramble key, the 7-segment table, the digit/decimal layout, and every unit/flag bit (below).
+
+It has **not** been bench-tested on physical hardware; ZOYI ZT-5B and Aneng AN9002 units are ordered to live-validate it (per the hardware-validation plan).
+
+### Android app cross-check (`com.yscoco.wyboem` v1.0.13)
+
+The app receives a notification, runs `EncryptionUtil.enc_code()` (XOR against a 20-byte key), then dispatches in `DataParsing.dealData()` on a descrambled `0x5A 0xA5` header followed by a **device-type byte** (`1`=QB_5G, `2`=S_5G, `3`=AB_300, `4`=P_66). Digit decode lives in `BleComputeUtil.getCount` / `getEveryStringNum`; the annunciator remap in `getRightOrderTable300` → `getUnit`/`getTag`/`getMoreResult`.
+
+- **XOR key — exact.** `EncryptionUtil.encByted`'s first 11 bytes equal `DATASHIFT` exactly (`65 33 115 85 162 193 50 113 102 170 59`; the app stores the high three as signed `-94 -63 -86`). The app indexes `key[i % 20]`; for an 11-byte frame that is identical to bdm.ts's non-modular indexing.
+- **Header — mutually confirming.** bdm.ts syncs on the *raw* `0x1B 0x84`; descrambled that is `0x1B^0x41 = 0x5A`, `0x84^0x21 = 0xA5` — precisely the app's `dealData` guard `bArr[0]==0x5A && bArr[1]==0xA5`. The constant header and the XOR key therefore confirm each other.
+- **Device type.** bdm.ts's fixed 11-byte layout matches the app's **AB_300 (device-type byte `== 3`)** path: `getCount(bytes 3–7)` for digits and `getRightOrderTable300()` for the annunciator remap. The app's other types use different lengths/orderings (type 2 ≈ 10 bytes; type 4 ≥ 19), so bdm.ts's `length === 11` sniff naturally self-selects exactly the type-3 frames it decodes correctly. The digit decode (bytes 3–7) is identical for types 1/2/3, so the displayed *number* is robust even if a frame were mislabelled — only annunciators differ between types.
+- **7-segment table — all 19 glyphs exact.** The app's `getEveryStringNum(highNibble, lowNibble)` resolves to the same glyphs as bdm.ts's `SEG[first+second]` (`0`–`9`, blank, `-`, `A U T O E F L`). In both, each digit takes the top 3 bits of one byte's high nibble + the next byte's low nibble for segments, with the high-nibble LSB acting as the decimal-point/sign bit.
+- **Decimal point & sign — exact.** App points come from the high-nibble LSB of bytes 3–6 (sign at byte 3, then `.` between successive digits); bdm.ts's `prePoints = ['-', '.', '.', '.']` place them identically.
+- **Unit / prefix / AC-DC / flag bits — all match.** Tracing `getAllResult → getRightOrderTable300 → getUnit/getTag/getMoreResult` to physical bits reproduces every bdm.ts offset (frame bytes are 0-based from the `0x5A 0xA5` header; `b9.4` = byte 9, bit 4):
+
+  | Field | bdm bit | byte.bit | | Field | bdm bit | byte.bit |
+  | --- | --- | --- | --- | --- | --- | --- |
+  | V | 75 | b9.4 | | n | 64 | b8.7 |
+  | A | 72 | b9.7 | | µ | 66 \| 85 | b8.5 \| b10.2 |
+  | F | 67 | b8.4 | | m | 65 \| 74 \| 84 | b8.6 \| b9.5 \| b10.3 |
+  | Ω | 78 | b9.1 | | M | 76 | b9.3 |
+  | Hz | 79 | b9.0 | | k | 77 | b9.2 |
+  | °C | 57 | b7.6 | | AC | 68 | b8.3 |
+  | °F | 58 | b7.5 | | DC | 73 | b9.6 |
+  | diode | 56 | b7.7 | | cont | 28 | b3.3 |
+  | hold | 59 | b7.4 | | rel | 30 | b3.1 |
+  | auto | 87 | b10.0 | | lowBat | 31 | b3.0 |
+
+  This **confirms the previously-"inferred" dual prefix banks**: the app genuinely ORs `b8.5 | b10.2` → µ and `b8.6 | b9.5 | b10.3` → m, exactly bdm.ts's two-µ / three-m bits. AC/DC map to the app's `getTag` tags 1/2; `cont`(`b3.3`)/`diode`(`b7.7`) are the app's diode-vs-continuity tag pair; `auto`(`b10.0`) is confirmed via `getMoreResult`.
+
+Still inferred / not in this app version's helper tables (no conflict — bdm.ts surfaces an extra annunciator, or the app reads it elsewhere in the UI):
+- `%` (bit 69 / `b8.2`): decoded by bdm.ts but not mapped in the type-1/2/3 unit table.
+- `max` (bit 71 / `b8.0`) and `min` (bit 70 / `b8.1`): the app surfaces MAX/MIN via separate UI icons rather than these helper functions; the bit positions are plausible but not cross-confirmed here.
 - `hvWarning`, `peakMax`, `peakMin` are not represented in the 11-byte frame and are hard-coded `false`.
 - The framer's split/coalesced-notification handling mirrors the uni-t parser defensively; in practice one notification equals one frame, so multi-frame resync is untested against real traffic.
 
@@ -188,3 +220,4 @@ What is inferred / unverified:
 - Driver: `packages/protocol/src/drivers/bdm.ts`
 - Shared types: `packages/protocol/src/drivers/types.ts` (`Driver`/`DriverFramer`), `packages/protocol/src/types.ts` (`Reading`, `unitInfo`)
 - Upstream: `webspiderteam/Bluetooth-DMM-For-Windows` — `DecoderBluetoothDMM.cs` `BDMDecode` (11-byte path), `ParsedigitBDM` (7-segment table), `datashift` key; verified vs `Binary raw data.md` (36 annotated frames).
+- Ground-truth cross-check: official "Bluetooth DMM" Android app `com.yscoco.wyboem` (APKPure v1.0.13) — `EncryptionUtil.enc_code` (XOR key), `DataParsing.dealData` (header + device-type dispatch), `BleComputeUtil` (`getCount`, `getEveryStringNum`, `getRightOrderTable300`, `getUnit`/`getTag`). bdm.ts implements the AB_300 / device-type-3 path.

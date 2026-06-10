@@ -3,8 +3,13 @@
 //
 // Ported from webspiderteam/Bluetooth-DMM-For-Windows `Utilities.cs` `owonPlusTypeDecode` (the
 // function dispatched for `isBDM == 2` / `TestDevice == 6`), cross-referenced with the inline
-// protocol notes (the `BM35_BLE_*` UUIDs and the MODE_* function table). NOT bench-tested on
-// physical hardware, so `verification` is 'ported-unverified' (PLAN §6 "Verification honesty").
+// protocol notes (the `BM35_BLE_*` UUIDs and the MODE_* function table), then validated
+// byte-exact against the official OWON Multimeter BLE4.0 app's `handleReceivedData_common`
+// decoder via the fake-ble-meter emulator oracle (a hardware-free bench test): the scale/function
+// nibbles, the SI-prefix + unit tables, and the LSB-first flag order (fixed in 4506bdc) all match
+// the vendor app. No bug was found here. So `verification` is 'app-verified' — decode-verified
+// against the vendor app, not yet live on a physical meter (the app couldn't render this meter
+// live due to its own CCCD bug).
 //
 // Frame format — IMPORTANT, this is what separates owon-plus from its FFF0 siblings:
 //   * 6 raw little-endian bytes, one notification == one frame.
@@ -265,7 +270,7 @@ const FFF3_WRITE = '0000fff3-0000-1000-8000-00805f9b34fb';
 export const owonPlus: Driver = {
   id: 'owon-plus',
   label: 'Owon (B35T+/B41T+/OW18E/CM2100B)',
-  verification: 'ported-unverified',
+  verification: 'app-verified',
   // These meters commonly advertise names like "BDM"/"OWON"; FFF0 is shared with bdm/owon-old/
   // voltcraft, so `match` only claims the service and the orchestrator disambiguates by frame
   // shape via `looksLikeOwonPlusFrame`.

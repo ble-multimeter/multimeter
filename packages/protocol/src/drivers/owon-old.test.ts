@@ -215,6 +215,54 @@ describe('owon-old decode (real frames from the source app TestData dev_type==5)
   });
 });
 
+// App-verified regressions: the OWON BLE4.0 app's `handleReceivedData_B35` reads byte6 as an
+// ASCII decimal-point digit (not a first-set-bit bitmask) and the nano prefix from byte8 bit1
+// (not byte10 bit2 gated on byte9==0). These vectors are cross-checked against the emulator
+// oracle `fake-ble-meter/tests/decode_owon_old.py`. The earlier C#-port logic decoded byte6 as a
+// bitmask and nano from byte10.2; on these frames it diverges, so they pin the fix.
+describe('owon-old decode (app-verified byte6 / nano fixes)', () => {
+  it('byte6 is an ASCII digit: 0x33 ("3") → 0 decimals (bitmask port gave 2)', () => {
+    // digits 1234, byte6=0x33 (not one of 0x31/0x32/0x34 → 0 dp), mV. Old bitmask: 0x33&7=3 → 2dp.
+    const r = decodeOwonOld(
+      Uint8Array.from([0x2b, 0x31, 0x32, 0x33, 0x34, 0x20, 0x33, 0x00, 0x00, 0x40, 0x80, 0, 13, 10]),
+    );
+    expect(r.displayText).toBe('1234');
+    expect(r.displayUnit).toBe('mV');
+  });
+
+  it('byte6 0x35 ("5") → 0 decimals (bitmask port gave 3)', () => {
+    const r = decodeOwonOld(
+      Uint8Array.from([0x2b, 0x31, 0x32, 0x33, 0x34, 0x20, 0x35, 0x00, 0x00, 0x40, 0x80, 0, 13, 10]),
+    );
+    expect(r.displayText).toBe('1234');
+  });
+
+  it('nano prefix comes from byte8 bit1, independent of the farad bit (→ "nA")', () => {
+    // 4.700 nA DC: byte6=0x31 (3dp), digits 4700, byte7 bit4 (DC), byte8 bit1 (nano),
+    // byte10 bit6 (A). The byte10.2 farad bit is clear, so the old `byte10.2`-gated nano path
+    // would emit just "A"; the app-correct byte8.1 read yields "nA".
+    const r = decodeOwonOld(
+      Uint8Array.from([0x2b, 0x34, 0x37, 0x30, 0x30, 0x20, 0x31, 0x10, 0x02, 0, 0x40, 0, 13, 10]),
+    );
+    expect(r.displayText).toBe('4.700');
+    expect(r.displayUnit).toBe('nA');
+    expect(r.baseUnit).toBe('A');
+    expect(r.acdc).toBe('DC');
+    expect(r.function).toBe('DCA');
+    expect(r.baseValue).toBeCloseTo(4.7e-9, 15);
+  });
+
+  it('keeps "nF" for an ordinary capacitance frame (byte8.1 nano + byte10.2 farad)', () => {
+    // The common case still renders "nF": byte8 bit1 (nano) + byte10 bit2 (F), byte9=0.
+    const r = decodeOwonOld(
+      Uint8Array.from([0x2b, 0x34, 0x37, 0x30, 0x30, 0x20, 0x31, 0, 0x02, 0, 0x04, 0, 13, 10]),
+    );
+    expect(r.displayText).toBe('4.700');
+    expect(r.displayUnit).toBe('nF');
+    expect(r.function).toBe('CAP');
+  });
+});
+
 describe('owon-old sniffer (looksLikeOwonOldFrame)', () => {
   const REAL = [43, 50, 55, 52, 54, 32, 52, 49, 0, 64, 128, 27, 13, 10];
   const OL = [43, 63, 48, 58, 63, 32, 49, 33, 0, 16, 32, 61, 13, 10];
