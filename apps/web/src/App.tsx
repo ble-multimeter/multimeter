@@ -29,7 +29,9 @@ import { UnsupportedBrowser } from './components/UnsupportedBrowser';
 import { exportCsv, exportPng } from './lib/exporters';
 
 // Code-split the uPlot-heavy chart + the whole Recordings view so the initial bundle stays lean.
-const MultiChart = lazy(() => import('./components/MultiChart').then(m => ({ default: m.MultiChart })));
+const MultiChart = lazy(() =>
+  import('./components/MultiChart').then(m => ({ default: m.MultiChart })),
+);
 const SessionsList = lazy(() =>
   import('./components/SessionsList').then(m => ({ default: m.SessionsList })),
 );
@@ -74,16 +76,17 @@ export default function App() {
   // Show a focused "connect your first meter" invite instead of an empty card + chart + stats —
   // one meter is the common case, so don't make the user hunt for the connect control.
   const firstRun =
-    !meters.isDemo &&
-    meters.meters.length === 1 &&
-    meters.meters[0]!.state === 'idle' &&
-    !hasData;
+    !meters.isDemo && meters.meters.length === 1 && meters.meters[0]!.state === 'idle' && !hasData;
 
   // Card grid columns scale with the number of cards so they fill the row: 1 = full width,
   // 2 = half/half, 3+ = a 3-col grid (wraps to more rows). Cards = meters + derived channels.
   const cardCount = meters.meters.length + meters.derived.length;
   const gridCols =
-    cardCount <= 1 ? 'grid-cols-1' : cardCount === 2 ? 'sm:grid-cols-2' : 'sm:grid-cols-2 lg:grid-cols-3';
+    cardCount <= 1
+      ? 'grid-cols-1'
+      : cardCount === 2
+        ? 'sm:grid-cols-2'
+        : 'sm:grid-cols-2 lg:grid-cols-3';
 
   // Clean the home URL (HashRouter writes '#/' for root; we want the bare base path).
   useEffect(() => {
@@ -237,79 +240,81 @@ export default function App() {
                 firstRun ? (
                   <Welcome meter={meters.meters[0]!} meters={meters} />
                 ) : (
-                <div className="mx-auto flex w-full max-w-5xl flex-col gap-5 px-4 py-4">
-                  {/* Meter + derived cards — the column count scales with the card count so a
+                  <div className="mx-auto flex w-full max-w-5xl flex-col gap-5 px-4 py-4">
+                    {/* Meter + derived cards — the column count scales with the card count so a
                       single meter spans the full row (not stuffed in a corner). */}
-                  <div className={`grid grid-cols-1 gap-3 ${gridCols}`}>
-                    {meters.meters.map(c => (
-                      <MeterCard
-                        key={c.id}
-                        channel={c}
-                        meters={meters}
-                        removable={meters.meters.length > 1}
-                      />
-                    ))}
-                    {meters.derived.map(c => (
-                      <DerivedCard key={c.id} channel={c} meters={meters} />
-                    ))}
-                  </div>
-
-                  {/* Add a meter (demo adds a profiled demo meter; real fires its own gesture) */}
-                  <div className="flex flex-wrap items-center gap-2">
-                    <button
-                      onClick={() => (meters.isDemo ? meters.addDemoMeter() : meters.addRealMeter())}
-                      className="rounded-md border border-zinc-700 px-3 py-1.5 text-sm text-zinc-200 hover:bg-zinc-800"
-                    >
-                      + Add {meters.isDemo ? 'demo ' : ''}meter
-                    </button>
-                    <DerivedBuilder meters={meters} />
-                  </div>
-
-                  {/* Multi-series chart */}
-                  {hasData ? (
-                    <Suspense fallback={<ChartSkeleton />}>
-                      <MultiChart
-                        ref={chartRef}
-                        series={series}
-                        dark={dark}
-                        truncated={anyTruncated}
-                      />
-                    </Suspense>
-                  ) : (
-                    <EmptyChart isDemo={meters.isDemo} />
-                  )}
-
-                  {/* Per-channel statistics */}
-                  {recorder.channels.map(c => (
-                    <div key={c.id} className="flex flex-col gap-1">
-                      <div className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
-                        {c.label}
-                        {c.segment?.unit ? ` · ${c.segment.unit}` : ''}
-                      </div>
-                      <StatsPanel
-                        stats={c.stats}
-                        unit={c.segment?.unit ?? ''}
-                        durationMs={c.statsDurationMs}
-                        onReset={recorder.resetStats}
-                      />
+                    <div className={`grid grid-cols-1 gap-3 ${gridCols}`}>
+                      {meters.meters.map(c => (
+                        <MeterCard
+                          key={c.id}
+                          channel={c}
+                          meters={meters}
+                          removable={meters.meters.length > 1}
+                        />
+                      ))}
+                      {meters.derived.map(c => (
+                        <DerivedCard key={c.id} channel={c} meters={meters} />
+                      ))}
                     </div>
-                  ))}
 
-                  <RecordControls
-                    recState={recorder.recState}
-                    recCount={recorder.recCount}
-                    onRecord={recorder.record}
-                    onPause={recorder.pause}
-                    onResume={recorder.resume}
-                    onStop={recorder.stop}
-                  />
-                  <ExportButtons chartRef={chartRef} csvTarget={recorder.csvTarget} />
-                  <PinSession
-                    state={pinSession}
-                    onPin={pinReading}
-                    canPin={primaryReading !== null}
-                  />
-                </div>
+                    {/* Add a meter (demo adds a profiled demo meter; real fires its own gesture) */}
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        onClick={() =>
+                          meters.isDemo ? meters.addDemoMeter() : meters.addRealMeter()
+                        }
+                        className="rounded-md border border-zinc-700 px-3 py-1.5 text-sm text-zinc-200 hover:bg-zinc-800"
+                      >
+                        + Add {meters.isDemo ? 'demo ' : ''}meter
+                      </button>
+                      <DerivedBuilder meters={meters} />
+                    </div>
+
+                    {/* Multi-series chart */}
+                    {hasData ? (
+                      <Suspense fallback={<ChartSkeleton />}>
+                        <MultiChart
+                          ref={chartRef}
+                          series={series}
+                          dark={dark}
+                          truncated={anyTruncated}
+                        />
+                      </Suspense>
+                    ) : (
+                      <EmptyChart isDemo={meters.isDemo} />
+                    )}
+
+                    {/* Per-channel statistics */}
+                    {recorder.channels.map(c => (
+                      <div key={c.id} className="flex flex-col gap-1">
+                        <div className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
+                          {c.label}
+                          {c.segment?.unit ? ` · ${c.segment.unit}` : ''}
+                        </div>
+                        <StatsPanel
+                          stats={c.stats}
+                          unit={c.segment?.unit ?? ''}
+                          durationMs={c.statsDurationMs}
+                          onReset={recorder.resetStats}
+                        />
+                      </div>
+                    ))}
+
+                    <RecordControls
+                      recState={recorder.recState}
+                      recCount={recorder.recCount}
+                      onRecord={recorder.record}
+                      onPause={recorder.pause}
+                      onResume={recorder.resume}
+                      onStop={recorder.stop}
+                    />
+                    <ExportButtons chartRef={chartRef} csvTarget={recorder.csvTarget} />
+                    <PinSession
+                      state={pinSession}
+                      onPin={pinReading}
+                      canPin={primaryReading !== null}
+                    />
+                  </div>
                 )
               }
             />

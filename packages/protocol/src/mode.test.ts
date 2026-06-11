@@ -15,8 +15,15 @@ function reading(fn: string, acdc: 'AC' | 'DC' | ''): Reading {
     acdc,
     bargraph: 0,
     flags: {
-      max: false, min: false, hold: false, rel: false,
-      auto: true, lowBattery: false, hvWarning: false, peakMax: false, peakMin: false,
+      max: false,
+      min: false,
+      hold: false,
+      rel: false,
+      auto: true,
+      lowBattery: false,
+      hvWarning: false,
+      peakMax: false,
+      peakMin: false,
     },
   };
 }

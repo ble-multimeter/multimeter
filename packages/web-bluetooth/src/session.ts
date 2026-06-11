@@ -20,12 +20,7 @@ import {
   type Reading,
 } from '@ble-multimeter/protocol';
 import { Transport } from './transport';
-import {
-  isDemoMode,
-  demoReadingFor,
-  DEFAULT_DEMO_PROFILE,
-  type DemoProfile,
-} from './demo';
+import { isDemoMode, demoReadingFor, DEFAULT_DEMO_PROFILE, type DemoProfile } from './demo';
 
 export type MeterState =
   | 'unsupported' // no Web Bluetooth

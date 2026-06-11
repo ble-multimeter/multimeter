@@ -88,7 +88,12 @@ export function SessionsList({ sessions }: { sessions: Sessions }) {
 
 // A reopened channel's chart samples + stats. Derived channels carry their own persisted samples,
 // so the chart is a faithful replay of what was on screen — no recompute.
-function channelSeries(channel: OpenedChannel, index: number, colorKey: string, dark: boolean): ChartSeries {
+function channelSeries(
+  channel: OpenedChannel,
+  index: number,
+  colorKey: string,
+  dark: boolean,
+): ChartSeries {
   const last = channel.readings[channel.readings.length - 1];
   return {
     id: channel.id,
@@ -120,8 +125,7 @@ export function SessionViewer({
   const chartRef = useRef<MultiChartHandle>(null);
 
   const series: ChartSeries[] = useMemo(
-    () =>
-      ready ? opened!.channels.map((c, i) => channelSeries(c, i, colorKey, dark)) : [],
+    () => (ready ? opened!.channels.map((c, i) => channelSeries(c, i, colorKey, dark)) : []),
     [ready, opened, colorKey, dark],
   );
 
@@ -165,7 +169,11 @@ export function SessionViewer({
                 <div className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
                   {c.label}
                   {unit ? ` · ${unit}` : ''}
-                  <span className="ml-2 inline-block h-2 w-2 rounded-sm align-middle" style={{ backgroundColor: seriesStroke(i, colorKey, dark) }} aria-hidden="true" />
+                  <span
+                    className="ml-2 inline-block h-2 w-2 rounded-sm align-middle"
+                    style={{ backgroundColor: seriesStroke(i, colorKey, dark) }}
+                    aria-hidden="true"
+                  />
                 </div>
                 <StatsPanel stats={stats} unit={unit} durationMs={durationMs} />
               </div>

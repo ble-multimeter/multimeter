@@ -142,7 +142,8 @@ export class RecorderSession {
     for (const spec of specs) {
       seen.add(spec.id);
       const existing = this.chans.get(spec.id);
-      if (existing) existing.spec = spec; // refresh label/role
+      if (existing)
+        existing.spec = spec; // refresh label/role
       else this.chans.set(spec.id, this.newChannelState(spec));
     }
     for (const id of [...this.chans.keys()]) {
@@ -162,8 +163,7 @@ export class RecorderSession {
       .map(c => {
         const window = c.samples.filter(s => s.t >= c.statsStartT);
         const stats = computeStats(window.map(s => s.v));
-        const statsDurationMs =
-          window.length > 1 ? window[window.length - 1]!.t - window[0]!.t : 0;
+        const statsDurationMs = window.length > 1 ? window[window.length - 1]!.t - window[0]!.t : 0;
         return {
           id: c.spec.id,
           label: c.spec.label,

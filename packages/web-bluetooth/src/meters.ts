@@ -9,7 +9,12 @@
 // framework-agnostic (no React, no DOM beyond what MeterSession already needs); demo and real BLE
 // differ only in how a meter channel's MeterSession is constructed.
 
-import { combineReadings, derivedFormula, deriveUnit, type Reading } from '@ble-multimeter/protocol';
+import {
+  combineReadings,
+  derivedFormula,
+  deriveUnit,
+  type Reading,
+} from '@ble-multimeter/protocol';
 import type { DerivedOp, MeterControl } from '@ble-multimeter/protocol';
 import { MeterSession, type MeterSnapshot, type MeterState } from './session';
 import { demoKind, DEMO_PROFILES, DEFAULT_DEMO_PROFILE, type DemoProfile } from './demo';
@@ -228,7 +233,12 @@ export class MetersSession {
     // sample is a gap rather than a stale-but-plausible number masquerading as live.
     const a = aStale ? null : (aSnap?.reading ?? null);
     const b = bStale ? null : (bSnap?.reading ?? null);
-    const formula = derivedFormula(d.label, d.op, this.roleOf(d.aChannelId), this.roleOf(d.bChannelId));
+    const formula = derivedFormula(
+      d.label,
+      d.op,
+      this.roleOf(d.aChannelId),
+      this.roleOf(d.bChannelId),
+    );
     d.reading = combineReadings(d.op, formula, a, b, now);
   }
 
@@ -309,9 +319,7 @@ export class MetersSession {
     entry!.session.disconnect();
     entry!.session.dispose();
     // Drop derived channels that can no longer be computed.
-    this.derivedList = this.derivedList.filter(
-      d => d.aChannelId !== id && d.bChannelId !== id,
-    );
+    this.derivedList = this.derivedList.filter(d => d.aChannelId !== id && d.bChannelId !== id);
     this.emit();
   };
 

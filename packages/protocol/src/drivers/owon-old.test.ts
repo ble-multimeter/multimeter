@@ -224,7 +224,9 @@ describe('owon-old decode (app-verified byte6 / nano fixes)', () => {
   it('byte6 is an ASCII digit: 0x33 ("3") → 0 decimals (bitmask port gave 2)', () => {
     // digits 1234, byte6=0x33 (not one of 0x31/0x32/0x34 → 0 dp), mV. Old bitmask: 0x33&7=3 → 2dp.
     const r = decodeOwonOld(
-      Uint8Array.from([0x2b, 0x31, 0x32, 0x33, 0x34, 0x20, 0x33, 0x00, 0x00, 0x40, 0x80, 0, 13, 10]),
+      Uint8Array.from([
+        0x2b, 0x31, 0x32, 0x33, 0x34, 0x20, 0x33, 0x00, 0x00, 0x40, 0x80, 0, 13, 10,
+      ]),
     );
     expect(r.displayText).toBe('1234');
     expect(r.displayUnit).toBe('mV');
@@ -232,7 +234,9 @@ describe('owon-old decode (app-verified byte6 / nano fixes)', () => {
 
   it('byte6 0x35 ("5") → 0 decimals (bitmask port gave 3)', () => {
     const r = decodeOwonOld(
-      Uint8Array.from([0x2b, 0x31, 0x32, 0x33, 0x34, 0x20, 0x35, 0x00, 0x00, 0x40, 0x80, 0, 13, 10]),
+      Uint8Array.from([
+        0x2b, 0x31, 0x32, 0x33, 0x34, 0x20, 0x35, 0x00, 0x00, 0x40, 0x80, 0, 13, 10,
+      ]),
     );
     expect(r.displayText).toBe('1234');
   });

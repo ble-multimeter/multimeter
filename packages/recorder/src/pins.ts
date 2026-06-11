@@ -7,7 +7,12 @@
 // first pin auto-starts a session; stop() finalizes it; the next pin starts a fresh one.
 // Extracted from the React usePinSession hook.
 
-import { deriveSegments, type ChannelInfo, type Reading, type Session } from '@ble-multimeter/protocol';
+import {
+  deriveSegments,
+  type ChannelInfo,
+  type Reading,
+  type Session,
+} from '@ble-multimeter/protocol';
 import * as storage from './storage';
 import { newId } from './ids';
 

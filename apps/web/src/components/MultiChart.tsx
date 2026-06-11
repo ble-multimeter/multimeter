@@ -238,9 +238,7 @@ export const MultiChart = forwardRef<MultiChartHandle, Props>(function MultiChar
               {s.unit ? ` (${s.unit})` : ''}
             </span>
           ))}
-          {truncated && (
-            <span className="text-amber-500/80">showing last {MAX_POINTS} pts</span>
-          )}
+          {truncated && <span className="text-amber-500/80">showing last {MAX_POINTS} pts</span>}
         </div>
         <div className="flex gap-1" role="group" aria-label="Chart time window">
           {WINDOWS.map(w => (

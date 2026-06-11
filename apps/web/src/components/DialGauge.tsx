@@ -65,7 +65,15 @@ export function DialGauge({
         const [ox, oy] = pt(f, R);
         const [ix, iy] = pt(f, R - 5);
         return (
-          <line key={f} x1={ox} y1={oy} x2={ix} y2={iy} className="stroke-stone-400" strokeWidth={1} />
+          <line
+            key={f}
+            x1={ox}
+            y1={oy}
+            x2={ix}
+            y2={iy}
+            className="stroke-stone-400"
+            strokeWidth={1}
+          />
         );
       })}
 
@@ -77,13 +85,7 @@ export function DialGauge({
         return (
           <g key={f}>
             <line x1={ox} y1={oy} x2={ix} y2={iy} className="stroke-stone-600" strokeWidth={1.8} />
-            <text
-              x={lx}
-              y={ly + 3.5}
-              className="fill-stone-600"
-              fontSize={9}
-              textAnchor="middle"
-            >
+            <text x={lx} y={ly + 3.5} className="fill-stone-600" fontSize={9} textAnchor="middle">
               {fmtScale(f * fullScale)}
             </text>
           </g>

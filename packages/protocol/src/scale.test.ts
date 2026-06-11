@@ -16,8 +16,15 @@ function reading(displayValue: number | null, overload = false): Reading {
     acdc: 'DC',
     bargraph: 0,
     flags: {
-      max: false, min: false, hold: false, rel: false,
-      auto: true, lowBattery: false, hvWarning: false, peakMax: false, peakMin: false,
+      max: false,
+      min: false,
+      hold: false,
+      rel: false,
+      auto: true,
+      lowBattery: false,
+      hvWarning: false,
+      peakMax: false,
+      peakMin: false,
     },
   };
 }

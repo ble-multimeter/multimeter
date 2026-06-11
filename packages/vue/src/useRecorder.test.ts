@@ -37,8 +37,7 @@ const single = (r: Reading | null): RecordableChannel[] => [
 ];
 
 // The single channel's view in the snapshot.
-const vView = (api: ReturnType<typeof useRecorder>) =>
-  api.channels.value.find(c => c.id === 'v')!;
+const vView = (api: ReturnType<typeof useRecorder>) => api.channels.value.find(c => c.id === 'v')!;
 
 describe('vue useRecorder', () => {
   it('feeds a reactive channels source and exposes windowed stats', () => {

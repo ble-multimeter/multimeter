@@ -98,10 +98,7 @@ describe('toCsv — long format', () => {
   });
 
   it('breaks same-ts ties by channel label deterministically', () => {
-    const csv = toCsv([
-      chan('Z', [reading({ ts: 5 })]),
-      chan('A', [reading({ ts: 5 })]),
-    ]);
+    const csv = toCsv([chan('Z', [reading({ ts: 5 })]), chan('A', [reading({ ts: 5 })])]);
     const rows = csv.split('\r\n').slice(1);
     expect(rows.map(r => r.split(',')[1])).toEqual(['A', 'Z']);
   });

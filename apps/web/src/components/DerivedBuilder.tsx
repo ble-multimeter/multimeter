@@ -52,7 +52,12 @@ export function DerivedBuilder({ meters }: { meters: Meters }) {
 
   const add = () => {
     if (!preview.ok) return;
-    const id = meters.addDerived({ label: label.trim() || 'X', op, aChannelId: aId, bChannelId: bId });
+    const id = meters.addDerived({
+      label: label.trim() || 'X',
+      op,
+      aChannelId: aId,
+      bChannelId: bId,
+    });
     if (id) setOpen(false);
   };
 

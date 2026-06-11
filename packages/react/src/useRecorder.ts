@@ -44,7 +44,9 @@ export function useRecorder(channels: RecordableChannel[]): Recorder {
   // Keep the engine's registered channel set in sync with the live channels (id/label/derived
   // refs). A stable key avoids re-registering on every reading tick.
   const specKey = channels
-    .map(c => `${c.id}:${c.label}:${c.kind}:${c.op ?? ''}:${c.aChannelId ?? ''}:${c.bChannelId ?? ''}`)
+    .map(
+      c => `${c.id}:${c.label}:${c.kind}:${c.op ?? ''}:${c.aChannelId ?? ''}:${c.bChannelId ?? ''}`,
+    )
     .join('|');
   useEffect(() => {
     const specs: ChannelSpec[] = channels.map(c => ({

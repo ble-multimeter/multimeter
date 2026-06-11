@@ -5,17 +5,13 @@
 import type { DerivedChannel, Meters } from '@ble-multimeter/react';
 import { OP_SYMBOL } from '@ble-multimeter/protocol';
 
-export function DerivedCard({
-  channel,
-  meters,
-}: {
-  channel: DerivedChannel;
-  meters: Meters;
-}) {
+export function DerivedCard({ channel, meters }: { channel: DerivedChannel; meters: Meters }) {
   const r = channel.reading;
   // The input role labels, so the formula reads in domain terms (V × I, not opaque ids).
   const roleOf = (id: string) =>
-    meters.meters.find(m => m.id === id)?.role ?? meters.derived.find(d => d.id === id)?.label ?? id;
+    meters.meters.find(m => m.id === id)?.role ??
+    meters.derived.find(d => d.id === id)?.label ??
+    id;
   const formula = `${channel.label} = ${roleOf(channel.aChannelId)} ${OP_SYMBOL[channel.op]} ${roleOf(channel.bChannelId)}`;
   const value = r && r.baseValue !== null ? r.displayText : '—';
   // Prefer the auto-prefixed display unit (mW/kW) when there's a value; fall back to the SI unit.
