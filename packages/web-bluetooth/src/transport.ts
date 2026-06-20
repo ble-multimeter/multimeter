@@ -12,6 +12,21 @@ import { drivers, allNamePrefixes, type DriverGattProfile } from '@ble-multimete
 
 const DEVICE_INFO_SERVICE = 0x180a; // model/serial/firmware strings — nice-to-have
 
+// Opt-in raw BLE tracing for bringing up an unverified driver against real hardware. Enable in the
+// browser console with `localStorage.bleDebug = 1` (then reload), disable with `delete
+// localStorage.bleDebug`. Off by default → zero output in normal use and in tests/node.
+const bleDebugOn = (): boolean => {
+  try {
+    return typeof localStorage !== 'undefined' && !!localStorage.getItem('bleDebug');
+  } catch {
+    return false;
+  }
+};
+const hex = (b: Uint8Array): string => [...b].map(x => x.toString(16).padStart(2, '0')).join(' ');
+const dbg = (...a: unknown[]): void => {
+  if (bleDebugOn()) console.log('[ble]', ...a);
+};
+
 export interface TransportProfile {
   id: string;
   gatt: DriverGattProfile;
@@ -126,6 +141,14 @@ export class Transport {
     this.matchedId = chosen.id;
 
     const chars = await svc.getCharacteristics();
+    dbg(`matched id=${chosen.id} service=${chosen.gatt.service}; characteristics:`);
+    for (const c of chars) {
+      const p = c.properties;
+      const flags = (['notify', 'indicate', 'read', 'write', 'writeWithoutResponse'] as const)
+        .filter(k => p[k])
+        .join(',');
+      dbg(`  ${c.uuid}  [${flags}]`);
+    }
     // Prefer the profile's UUIDs; fall back to characteristic properties so a firmware
     // reshuffle doesn't strand us.
     this.notifyChar =
@@ -137,6 +160,7 @@ export class Transport {
     if (!this.notifyChar || !this.writeChar) {
       throw new Error('notify/write characteristics not found on this device');
     }
+    dbg(`subscribing notify=${this.notifyChar.uuid} write=${this.writeChar.uuid}`);
 
     await this.notifyChar.startNotifications();
     this.notifyChar.addEventListener('characteristicvaluechanged', this.handleValue);
@@ -146,6 +170,7 @@ export class Transport {
     const dv = (e.target as BluetoothRemoteGATTCharacteristic).value;
     if (!dv) return;
     const bytes = new Uint8Array(dv.buffer.slice(dv.byteOffset, dv.byteOffset + dv.byteLength));
+    dbg(`notify ${bytes.length}B: ${hex(bytes)}`);
     this.onChunk?.(bytes);
   };
 
