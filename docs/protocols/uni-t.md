@@ -2,7 +2,7 @@
 
 > **State:** UT60BT `verified` (live-tested), UT161A–E `expected` (same decoder). **Driver:** `packages/protocol/src/drivers/uni-t.ts`. **Source:** ported from `webspiderteam/Bluetooth-DMM-For-Windows` (`Decoders/DecoderUni_T.cs`), UT60BT confirmed live.
 
-The `uni-t` driver speaks UNI-T's modern **"iDMM" protocol**: a serial-style link over BLE GATT carrying `0xAB 0xCD`-framed packets. After connecting it runs a small event-driven handshake (GET-NAME → wait for the name frame → GET-DATA), then the meter streams 19-byte `AB CD 10 …` measurement frames a few times a second. Each frame carries a function code, a range digit, the literal LCD string, an analog bargraph, and three flag bytes; the decoder turns that into a `Reading` with both the on-LCD `displayValue`/`displayUnit` and an SI-normalized `baseValue`/`baseUnit` so charts stay continuous across autorange prefix flips. The UT60BT was reverse-engineered and confirmed against a physical `UT60BTk` unit (GATT enumeration + frame captures, 2026-06-06); the UT161A–E series is routed through the **same** decoder by UNI-T's Smart Measure app and is expected-but-unverified. This is *not* the older raw-LCD-segment-bitmap family of UNI-T/Aneng meters — that is ignored. Markers below: ✅ confirmed from a working implementation / live capture · ⚠️ present in code but needs verification against the physical unit.
+The `uni-t` driver speaks UNI-T's modern **"iDMM" protocol**: a serial-style link over BLE GATT carrying `0xAB 0xCD`-framed packets. After connecting it runs a small event-driven handshake (GET-NAME → wait for the name frame → GET-DATA), then the meter streams 19-byte `AB CD 10 …` measurement frames a few times a second. Each frame carries a function code, a range digit, the literal LCD string, an analog bargraph, and three flag bytes; the decoder turns that into a `Reading` with both the on-LCD `displayValue`/`displayUnit` and an SI-normalized `baseValue`/`baseUnit` so charts stay continuous across autorange prefix flips. The UT60BT was confirmed against a physical `UT60BTk` unit (GATT enumeration + frame captures, 2026-06-06); the UT161A–E series is routed through the **same** decoder and is expected-but-unverified. This is *not* the older raw-LCD-segment-bitmap family of UNI-T/Aneng meters — that is ignored. Markers below: ✅ confirmed from a working implementation / live capture · ⚠️ present in code but needs verification against the physical unit.
 
 ## Models
 
@@ -179,7 +179,7 @@ interface Reading {            // packages/protocol/src/types.ts:5-27
 
 ## Controls
 
-Front-panel soft buttons, reverse-engineered from the UNI-T Smart Measure Android app (`Anjianview2` → `BleManager.sendCmd`), exposed via the driver's `controls` map (`uni-t.ts:56-65`) and sent on the same write characteristic as the handshake. Each is a fixed `AB CD 03 <cmd> 01 <chk16-BE>` frame from `framing.ts:16-23` (chk = `cmd + 0x17B`).
+Front-panel soft buttons, exposed via the driver's `controls` map (`uni-t.ts:56-65`) and sent on the same write characteristic as the handshake. Each is a fixed `AB CD 03 <cmd> 01 <chk16-BE>` frame from `framing.ts:16-23` (chk = `cmd + 0x17B`).
 
 | Control (driver key) | cmd | Bytes (hex) | Source |
 |---|---|---|---|
@@ -192,7 +192,7 @@ Front-panel soft buttons, reverse-engineered from the UNI-T Smart Measure Androi
 | `hold` | `0x4A` | `AB CD 03 4A 01 C5` | `framing.ts:22` |
 | `select` (function/mode) | `0x4C` | `AB CD 03 4C 01 C7` | `framing.ts:23` |
 
-> ✅ **The soft buttons work on the UT60BT** with the `AB CD 03 <cmd>` framing in the table above. An *earlier* attempt used the reference repo's generic UNI-T button set (`EA EC 70 <btn> A2 C1 32 71 64 <chk>` framing) and the meter ignored every write — that framing was simply **wrong** (the repo leaves the UT60BT's command slot empty). Decompiling the Smart Measure app revealed the correct `AB CD 03 <cmd>` codes, and with those the panel buttons (RANGE/SELECT/HOLD/REL/Hz/MAX-MIN, plus backlight) take effect. The rotary function dial is mechanical and not addressable over BLE, but the soft buttons are.
+> ✅ **The soft buttons work on the UT60BT** with the `AB CD 03 <cmd>` framing in the table above. An *earlier* attempt used the reference repo's generic UNI-T button set (`EA EC 70 <btn> A2 C1 32 71 64 <chk>` framing) and the meter ignored every write — that framing was simply **wrong** (the repo leaves the UT60BT's command slot empty). With the correct `AB CD 03 <cmd>` codes the panel buttons (RANGE/SELECT/HOLD/REL/Hz/MAX-MIN, plus backlight) take effect. The rotary function dial is mechanical and not addressable over BLE, but the soft buttons are.
 
 ## Verification
 
@@ -203,12 +203,12 @@ Front-panel soft buttons, reverse-engineered from the UNI-T Smart Measure Androi
 - ✅ `frame[3]` bit7 always 0; checksum is a 16-bit BE sum of `[0..16]`.
 - ✅ Function codes 00,02,03,04,06,07,08,09,0a,0c,0e,14 verified across dial positions.
 - ✅ Range→unit for V/mV/Hz(r0)/°C/µA/mA/nF; OHM kΩ confirmed (100 kΩ resistor read ~98 kΩ, matched LCD).
-- ✅ Soft buttons (RANGE/SELECT/HOLD/REL/Hz/MAX-MIN + backlight) work with the `AB CD 03 <cmd>` framing. An earlier wrong framing (`EA EC 70 …`, from the reference repo) was ignored, which had mistakenly suggested the meter was read-only; the decompiled Smart Measure codes fixed it.
+- ✅ Soft buttons (RANGE/SELECT/HOLD/REL/Hz/MAX-MIN + backlight) work with the `AB CD 03 <cmd>` framing. An earlier wrong framing (`EA EC 70 …`, from the reference repo) was ignored, which had mistakenly suggested the meter was read-only; the correct `AB CD 03 <cmd>` codes fixed it.
 
 **Inferred / unverified (⚠️):**
 - The OHM **MΩ** step and the CAP (µF/mF) and Hz (kHz/MHz) **metric-prefix** steps — need a known high-value resistor + capacitor; all Ω captures so far were overload. Not blocking; the prefix table comes from the reference impl and the verified cases check out.
 - FUNCTIONS codes 22–30 (ACA/DCA dupes, LPF, AC/DC, AC+DC, LPFA, INRUSH) and their RANGE_UNITS rows — ported from `DecoderUni_T.cs` for other UT models, no hardware.
-- **UT161A–E** entirely — same decoder and same soft-button codes by lineage (Smart Measure routes them through it), but never live-tested on a UT161.
+- **UT161A–E** entirely — same decoder and same soft-button codes by lineage, but never live-tested on a UT161.
 - Keep-alive `type-request` (9-byte) / `data-request` (7-byte) frames — never observed in captures; responders kept defensively.
 
 ## Source
@@ -216,4 +216,4 @@ Front-panel soft buttons, reverse-engineered from the UNI-T Smart Measure Androi
 - Driver: `packages/protocol/src/drivers/uni-t.ts`
 - Decoder: `packages/protocol/src/decode.ts`, tables in `packages/protocol/src/types.ts`
 - Framing + command/control frames: `packages/protocol/src/framing.ts`
-- Upstream reference: `webspiderteam/Bluetooth-DMM-For-Windows` — `Decoders/DecoderUni_T.cs` (`Uni_tDecode` / `functionStrings`), `Bluetooth.Dmm/GattMonitor.cs` (DevType 4); soft-button codes from the UNI-T Smart Measure Android app (`Anjianview2` → `BleManager.sendCmd`).
+- Upstream reference: `webspiderteam/Bluetooth-DMM-For-Windows` — `Decoders/DecoderUni_T.cs` (`Uni_tDecode` / `functionStrings`), `Bluetooth.Dmm/GattMonitor.cs` (DevType 4).

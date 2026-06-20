@@ -1,10 +1,10 @@
 # UNI-T UT202BT (AC clamp) — `ut202bt`
 
-> **State:** `expected` (rides the `verified` UT60BT decoder; no clamp hardware tested). **Driver:** `packages/protocol/src/drivers/ut202bt.ts`. **Source:** ported from `webspiderteam/Bluetooth-DMM-For-Windows` / UNI-T "deviceType 1"; reuses the UT60BT decode path.
+> **State:** `expected` (rides the `verified` UT60BT decoder; no clamp hardware tested). **Driver:** `packages/protocol/src/drivers/ut202bt.ts`. **Source:** ported from `webspiderteam/Bluetooth-DMM-For-Windows`; reuses the UT60BT decode path.
 
 ## (overview)
 
-The UT202BT is a UNI-T AC clamp meter. In UNI-T's Smart Measure app it is a **"deviceType 1"** device, which means it speaks the **exact same iDMM protocol as the UT60BT**: the same `0xAB 0xCD`-framed BLE link, the same GET-NAME → GET-DATA handshake, the same 19-byte measurement frame, and the same decoder. The `ut202bt` driver therefore does not implement any of that itself — it imports `decode()`, `FrameParser`, and the shared `COMMANDS` table and wires them up (`ut202bt.ts:13-14`).
+The UT202BT is a UNI-T AC clamp meter. It speaks the **exact same iDMM protocol as the UT60BT**: the same `0xAB 0xCD`-framed BLE link, the same GET-NAME → GET-DATA handshake, the same 19-byte measurement frame, and the same decoder. The `ut202bt` driver therefore does not implement any of that itself — it imports `decode()`, `FrameParser`, and the shared `COMMANDS` table and wires them up (`ut202bt.ts:13-14`).
 
 What is genuinely UT202BT-specific is small and physical: it is a clamp, so the live ranges are the clamp's current/voltage/resistance functions (ACA/DCA/ACV/Ω) rather than a handheld DMM's, and its front panel has **dedicated function-select keys** (ACA / ACV / Ω / NCV) that the UT60BT panel does not have. Those keys are documented in the driver as raw command bytes but are **deliberately not exposed** through the generic control set (`ut202bt.ts:6-8,56-61`).
 
@@ -69,7 +69,7 @@ Only the controls shared with the UT60BT front panel are exposed through the gen
 | `range` | `COMMANDS.RANGE` | `AB CD 03 46 01 C1` (cmd `0x46` — step manual range) | `ut202bt.ts:59`, `framing.ts:18` |
 | `hold` | `COMMANDS.HOLD` | `AB CD 03 4A 01 C5` (cmd `0x4A` — data hold) | `ut202bt.ts:60`, `framing.ts:22` |
 
-**Clamp front-panel function-select keys — documented but NOT wired.** The UT202BT panel has dedicated function-select keys (reverse-engineered from `Anjianview2`) that the generic UT60BT control set has no slot for. They are recorded in the driver's header comment as raw command codes but are **intentionally left out of the `controls` map** and the `MeterControl` union (`ut202bt.ts:6-8,56-57`):
+**Clamp front-panel function-select keys — documented but NOT wired.** The UT202BT panel has dedicated function-select keys that the generic UT60BT control set has no slot for. They are recorded in the driver's header comment as raw command codes but are **intentionally left out of the `controls` map** and the `MeterControl` union (`ut202bt.ts:6-8,56-57`):
 
 | Front-panel key | Command code | Source |
 |---|---|---|
@@ -85,7 +85,7 @@ These four codes are **not** present in the shared `COMMANDS` table (`framing.ts
 **`expected` (`ported-unverified`).** The decode path is the live-tested UT60BT one, so the frame parsing, decoding, and the RANGE/HOLD/handshake commands are as trustworthy as the UT60BT's (`ut202bt.ts:10-11`). What is **not** verified:
 
 - No physical UT202BT clamp was bench-tested; clamp function/range behaviour is inferred from the shared tables.
-- The clamp-specific function-select key codes (ACA `0x31` / ACV `0x33` / Ω `0x35` / NCV `0x36`) are taken from the Smart Measure app decompile and have not been confirmed against hardware — and are not wired up, so they cannot even be exercised through the current driver.
+- The clamp-specific function-select key codes (ACA `0x31` / ACV `0x33` / Ω `0x35` / NCV `0x36`) are ported and have not been confirmed against hardware — and are not wired up, so they cannot even be exercised through the current driver.
 
 ## Source
 

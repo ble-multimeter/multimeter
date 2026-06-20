@@ -1,6 +1,6 @@
 # AICARE clamp meter (AP-570C-APP) — `ai-care`
 
-> **State:** `untested` on hardware, but **cross-verified against the official "INTELLIGENT MULTIMETER" Android app** (`aicare.net.cn.iMultimeter`, APKPure v1.0.9) in addition to the C# source — a flawless byte-exact match (see [Verification](#verification)). **Driver:** `packages/protocol/src/drivers/ai-care.ts`. **Source:** ported from `webspiderteam/Bluetooth-DMM-For-Windows` `Utilities.cs` `aiCareDecode` (`isBDM == 3`).
+> **State:** `untested` on hardware (see [Verification](#verification)). **Driver:** `packages/protocol/src/drivers/ai-care.ts`. **Source:** ported from `webspiderteam/Bluetooth-DMM-For-Windows` `Utilities.cs` `aiCareDecode` (`isBDM == 3`).
 
 The `ai-care` driver decodes the AICARE family of Bluetooth clamp meters — `DevType 3` in the source Windows app's GATT table, GATT service `0xFFB0`. The meter performs no handshake and answers no requests; the moment a client subscribes to the notify characteristic it free-streams one 14-byte notification per LCD update. Unlike the XOR-scrambled BDM family, AICARE frames are **self-addressing**: every byte carries its own destination slot in its high nibble and 4 payload bits in its low nibble, so descrambling is a scatter-by-address rather than a fixed-key XOR. Concatenating the 14 low nibbles in addressed order yields a 56-bit field from which AC/DC/AUTO/BT flags, four 7-segment digits, and unit/status annunciator bits are read at fixed bit offsets. There is no checksum and no sync word; framing keys off each byte's self-address (the slot-1 byte marks the frame start). The driver is receive-only — it exposes no controls. Everything below is derived from `ai-care.ts`; nibble and bit offsets are quoted directly from the code.
 
@@ -185,51 +185,15 @@ Receive-only. The driver declares no `controls` map (none in `ai-care.ts:225-251
 
 ## Verification
 
-`verification: 'ported-unverified'` (`ai-care.ts:228`). Two independent implementations now agree on this decoder:
-
-1. The original port from `Utilities.cs` `aiCareDecode` (the partial method the `isBDM == 3` dispatch actually calls — there is also a `DecoderAI_Care.cs` stub, but the live dispatch uses `aiCareDecode`, `ai-care.ts:4-7`).
-2. **The official "INTELLIGENT MULTIMETER" Android app** (`aicare.net.cn.iMultimeter`, APKPure v1.0.9) — a flawless, byte-exact match on GATT, the self-addressing descramble, all 12 glyphs, the digit/decimal layout, and all 21 unit/flag bits (below).
+`verification: 'ported-unverified'` (`ai-care.ts:228`). The decoder is a direct port of `Utilities.cs` `aiCareDecode` (the partial method the `isBDM == 3` dispatch actually calls — there is also a `DecoderAI_Care.cs` stub, but the live dispatch uses `aiCareDecode`, `ai-care.ts:4-7`).
 
 It has **not** been bench-tested on physical hardware.
 
-### Android app cross-check (`aicare.net.cn.iMultimeter` v1.0.9)
-
-The app's BLE library is the AICARE protocol ground-truth: `MultimeterManager` (GATT + notifications), `MultimeterConfig` (`getData`/`getAllSeg`/`getNumberList`, the decode), and `ParseData` (nibble helpers).
-
-- **GATT — exact.** `MultimeterManager` hardcodes service `0000ffb0…`, notify `0000ffb2…`, write `0000ffb1…` — identical to ai-care.ts.
-- **Self-addressing descramble — exact.** `getAllSeg(b)` reads `getInt(b)` = high nibble = 1-based slot and `getSeg(b)` = low nibble = 4 payload bits, dispatching each into its addressed slot — precisely ai-care.ts's `((b & 0xf0) >> 4) - 1` slot + low-nibble payload. (The app's `checkeData` additionally requires strictly consecutive slot addresses 1…14; ai-care.ts's scatter-by-address is equivalent for in-order frames and more tolerant of reordering.)
-- **Single family — confirms scope.** The app has one 14-byte decode path and one GATT service, with **no device-type branching** (unlike the BDM app's four types). This confirms ai-care.ts's single-decoder design; any "other" meters it covers are pure rebadges of this exact protocol.
-- **7-segment table — all 12 glyphs exact.** The app encodes each digit as named segments A1–A7 (`getNumberList`); ai-care.ts's `SEG` keys are those 7 bits in the order `[A5,A6,A1,A4,A3,A7,A2]`. Every entry (`0`–`9`, `L`, blank) was reproduced — e.g. `0` = A1–A6 (no A7) = `1111101`; `1` = {A2,A3} = `0000101`; `L` = {A4,A5,A6} = `1101000`.
-- **Digits, sign & decimal — exact.** Sign `MINUS` = bit 4; digit fields at bits 5/13/21/29; decimal points `P1`/`P2`/`P3` = bits 12/20/28. The app's `getPointIndex` (`P1`→`A.BCD`, `P2`→`AB.CD`, `P3`→`ABC.D`) places the point identically to ai-care.ts.
-- **Unit / flag bits — all 21 match.** Mapping each ai-care.ts bit to the app's `segN[pos]` label reproduces every assignment:
-
-  | ai-care bit | app label | | ai-care bit | app label |
-  | --- | --- | --- | --- | --- |
-  | AC (0) | AC | | m (40) | m |
-  | DC (1) | DC | | % (41) | % |
-  | auto (2) | AUTO | | M (42) | M |
-  | `-` sign (4) | MINUS | | cont (43) | HORN |
-  | µ (36) | u | | F (44) | F |
-  | n (37) | n | | Ω (45) | OHM |
-  | k (38) | K | | rel (46) | Triangle |
-  | diode (39) | DIODE | | hold (47) | HOLD |
-  | A (48) | A | | lowBat (51) | BATTERY |
-  | V (49) | V | | °C (53) | C |
-  | Hz (50) | Hz | | | |
-
-Two app annunciators ai-care.ts handles loosely (no bug):
-- **BT / PC-link** (bit 3, app `PC_LINK`): decoded as a layout flag, not surfaced in `Reading`.
-- **Δ "Triangle"** (bit 46): the app labels this `Triangle`; ai-care.ts maps it to `rel` (the standard Δ = relative meaning on these clamp meters). This is the one *semantic* (not bit-position) interpretation in the port.
-
-Confirmed by the app — resolves earlier "unverified" notes:
-- The meter has **no °F annunciator** (the app's `seg14` carries only `C`) and **no MAX/MIN/peak** annunciators, so ai-care.ts correctly emits only `°C` and hard-codes `max`/`min`/`peakMax`/`peakMin` = `false`. A Fahrenheit reading is simply not produced by this hardware, so the unreachable `°F` branch in `functionFor` is harmless.
-
 Still defensive / untested:
-- The framer's split/coalesced-notification handling mirrors the uni-t parser; the app reassembles short notifications via `mergeArr`/`concat`, so the behaviour is equivalent, but multi-frame resync is untested against real traffic.
+- The framer's split/coalesced-notification handling mirrors the uni-t parser, but multi-frame resync is untested against real traffic.
 
 ## Source
 
 - Driver: `packages/protocol/src/drivers/ai-care.ts`
 - Shared types: `packages/protocol/src/drivers/types.ts` (`Driver`/`DriverFramer`), `packages/protocol/src/types.ts` (`Reading`, `unitInfo`)
 - Upstream: `webspiderteam/Bluetooth-DMM-For-Windows` — `Utilities.cs` `aiCareDecode` (the `isBDM == 3` dispatch path) and its `aiCareNumbers` 7-segment table.
-- Ground-truth cross-check: official "INTELLIGENT MULTIMETER" Android app `aicare.net.cn.iMultimeter` (APKPure v1.0.9) — `MultimeterManager` (GATT UUIDs), `MultimeterConfig` (`getData`/`getAllSeg`/`getNumberList` decode + `seg1`–`seg14` label tables), `ParseData` (nibble helpers).

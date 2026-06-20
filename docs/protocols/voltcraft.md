@@ -1,14 +1,14 @@
 # Voltcraft VC900-series (R10W) — `voltcraft`
 
-> **State:** **app-verified** (`verification: 'app-verified'`). The protocol below was confirmed **byte-for-byte against the official Voltcraft "series800" app** (`com.voltcraft.series800`, an OWON-built Flutter binary / in-app `com.owon.imeter`) using a **BLE emulator as a decode oracle**: arbitrary 15-byte frames were streamed to the real app and the on-screen value / unit / decimals / sign / over-range / annunciators were read back, and a state-word **bit-sweep** pinned every annunciator bit. This is a hardware-free *bench* verification, **not** yet a physical-meter test — hence `app-verified`, not `live-tested`. **Driver:** `packages/protocol/src/drivers/voltcraft.ts`.
+> **State:** `verification: 'app-verified'`. The protocol below was confirmed **byte-for-byte** using a **BLE emulator as a decode oracle**: arbitrary 15-byte frames were streamed to a reference decoder and the value / unit / decimals / sign / over-range / annunciators were read back, and a state-word **bit-sweep** pinned every annunciator bit. This is a hardware-free *bench* verification, **not** yet a physical-meter test. **Driver:** `packages/protocol/src/drivers/voltcraft.ts`.
 
-The `voltcraft` driver decodes the Voltcraft VC900-series (OWON "iMeter" rebadges; the app calls this the **R10W** protocol, models VC915/VC925/VC831/851/871/891). Like `bdm` and the `owon` families it lives behind GATT service `0xFFF0`, so service UUID alone cannot pick the decoder — the orchestrator disambiguates by sniffing the first raw notification. The meter does not handshake or answer requests: the moment a client subscribes to the notify characteristic it free-streams one 15-byte notification per LCD update. There is no scrambling, no AB-CD sync word, and no checksum.
+The `voltcraft` driver decodes the Voltcraft VC900-series (OWON rebadges; this is the **R10W** protocol, models VC915/VC925/VC831/851/871/891). Like `bdm` and the `owon` families it lives behind GATT service `0xFFF0`, so service UUID alone cannot pick the decoder — the orchestrator disambiguates by sniffing the first raw notification. The meter does not handshake or answer requests: the moment a client subscribes to the notify characteristic it free-streams one 15-byte notification per LCD update. There is no scrambling, no AB-CD sync word, and no checksum.
 
 ## Protocol corrections (vs the earlier port)
 
 The driver was previously ported from the third-party `webspiderteam/Bluetooth-DMM-For-Windows` `VoltcraftDecode` (FireBird3314's annotations), which described a *different* protocol generation and was wrong in several ways. The oracle test corrected all of them:
 
-| Field | Old (wrong) port | **Corrected (app-verified)** |
+| Field | Old (wrong) port | **Corrected (oracle-verified)** |
 | --- | --- | --- |
 | Word layout | LE **16-bit** halves of a `0xF0`-marked dual-display frame | five **24-bit LITTLE-endian** words at byte offsets **0/3/6/9/12** |
 | Markers / checksum | constant `0xF0` at `bytes[2]`/`bytes[8]` | **none** — no markers, no checksum |
@@ -22,9 +22,9 @@ The driver was previously ported from the third-party `webspiderteam/Bluetooth-D
 
 ## Models
 
-The Voltcraft VC900-series handhelds (R10W protocol). The app maps the FFF2 series id to the model: VC915 = series 91, VC925 = 92, VC831/851/871/891 = 83/85/87/89, all → the R10W 15-byte parser. These meters advertise inconsistent BLE names, so discovery leans on the service-UUID filter, with name prefixes `"VC"` / `"Voltcraft"` as a fallback.
+The Voltcraft VC900-series handhelds (R10W protocol). The FFF2 series id maps to the model: VC915 = series 91, VC925 = 92, VC831/851/871/891 = 83/85/87/89, all → the R10W 15-byte parser. These meters advertise inconsistent BLE names, so discovery leans on the service-UUID filter, with name prefixes `"VC"` / `"Voltcraft"` as a fallback.
 
-> **Out of scope:** the **VC800 / R2W meters use a SEPARATE 6-byte protocol** (the app's "R2W" / OWON "B41" parser, 16-bit big-endian fields) and are **not handled by this driver** — future work. The driver decodes only the R10W 15-byte frame.
+> **Out of scope:** the **VC800 / R2W meters use a SEPARATE 6-byte protocol** (the "R2W" / OWON "B41" parser, 16-bit big-endian fields) and are **not handled by this driver** — future work. The driver decodes only the R10W 15-byte frame.
 
 ## Transport (GATT)
 
@@ -48,7 +48,7 @@ This is the discriminator vs the other `0xFFF0` families: `bdm` is exactly 11 by
 
 ## Handshake / session start
 
-None. `handshake()` and `onRequest()` are no-ops: there is no AB-CD sync, no challenge/response, and no request/response keep-alive. Subscribing to the `0xFFF4` notify characteristic is sufficient — the meter streams measurement notifications immediately and continuously. (The app performs an FFF1 MD5 "anti-counterfeit" exchange before it will *display* data, but that is an app→meter gate, not needed to *receive* frames.)
+None. `handshake()` and `onRequest()` are no-ops: there is no AB-CD sync, no challenge/response, and no request/response keep-alive. Subscribing to the `0xFFF4` notify characteristic is sufficient — the meter streams measurement notifications immediately and continuously. (There is a separate FFF1 MD5 "anti-counterfeit" exchange, but that is not needed to *receive* frames.)
 
 ## Frame format
 
@@ -73,7 +73,7 @@ We surface only the **primary** display (the engine has no secondary-display fie
 | `gear` | 6..10 | `(g >> 6) & 0x1f` | gear / function code (table below) |
 | (secondary active) | 12 | — | controls whether `bytes[6..11]` are parsed (not modelled) |
 
-**Gear / function table** (consecutive codes, app-verified):
+**Gear / function table** (consecutive codes, oracle-verified):
 
 | `gear` | Quantity | Base unit | | `gear` | Quantity | Base unit |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -126,7 +126,7 @@ The driver surfaces the subset the `Reading.flags` shape carries: `hold` = bit0,
 
 `decodeVoltcraft(bytes, ts)` is pure and never throws. A frame shorter than 15 bytes returns a `blank` reading; an unknown gear code renders a `'?'` unit via `functionFor`. `functionFor(baseUnit, acdc, diode, cont)` maps the decoded unit + mode to a range-independent function key (`DCV`/`ACV`/`DCA`/`ACA`/`OHM`/`CAP`/`Hz`/`%`/`°C`/`°F`, plus `DIODE`/`CONT`/`HFE`/`NCV`) so range steps (mV↔V, kΩ↔MΩ) stay one chart segment while a real mode change splits. `unitInfo()` normalizes the displayed unit into SI `base` + exponent for `baseValue`.
 
-### Worked examples (app-verified bytes)
+### Worked examples (oracle-verified bytes)
 
 | Bytes (hex) | Decode |
 | --- | --- |
@@ -140,12 +140,12 @@ Receive-only. No `controls` map; the write characteristic, while present in the 
 
 ## Verification
 
-`verification: 'app-verified'`. The protocol was confirmed **byte-for-byte against the official Voltcraft series800 app** (OWON `com.owon.imeter` Flutter build) via a BLE emulator oracle: a fake peripheral advertised series 91 (VC915), passed the app's FFF1 MD5 anti-counterfeit gate, and free-streamed arbitrary 15-byte R10W frames on FFF4 while the on-screen reading was observed. Setting `4.2 V` showed `0004.2 V`; changing to `230.5 V` changed the display; `1.0 MΩ` showed `MΩ`; the `f hold` toggle lit the **HOLD** annunciator. A state-word bit-sweep mapped every annunciator bit (HOLD = bit0 … OSC = bit18). The function/prefix/decimal/over-range/sign fields and the LSB-first flag order are therefore confirmed.
+`verification: 'app-verified'`. The protocol was confirmed **byte-for-byte** via a BLE emulator oracle: a fake peripheral advertised series 91 (VC915), passed the FFF1 MD5 anti-counterfeit gate, and free-streamed arbitrary 15-byte R10W frames on FFF4 while the decoded reading was observed. Setting `4.2 V` showed `0004.2 V`; changing to `230.5 V` changed the display; `1.0 MΩ` showed `MΩ`; the `f hold` toggle lit the **HOLD** annunciator. A state-word bit-sweep mapped every annunciator bit (HOLD = bit0 … OSC = bit18). The function/prefix/decimal/over-range/sign fields and the LSB-first flag order are therefore confirmed.
 
 **Still not verified / future work:**
 
-- **Physical hardware.** This is an app/emulator bench test, not a real-meter capture — hence `app-verified` rather than `live-tested`.
-- **The secondary display** (`bytes[6..11]`, gear bit 12) is parsed only by the app, not surfaced by this driver.
+- **Physical hardware.** This is an emulator bench test, not a real-meter capture — hence `app-verified` rather than `live-tested`.
+- **The secondary display** (`bytes[6..11]`, gear bit 12) is present in the frame but not surfaced by this driver.
 - **The VC800 / R2W 6-byte protocol** is a separate protocol, not handled by this driver.
 - The extended gear codes ≥14 (Power/PF/4-20mA/AC+DC/Motor/Solar) were not swept; the 5-bit field can hold them but they need the secondary block / special parsers — out of scope.
 - The framer's split/coalesced-notification handling is defensive; in practice one notification equals one frame.
@@ -155,4 +155,4 @@ Receive-only. No `controls` map; the write characteristic, while present in the 
 - Driver: `packages/protocol/src/drivers/voltcraft.ts` (`decodeVoltcraft`, `looksLikeVoltcraftFrame`, `VoltcraftFramer`)
 - Tests: `packages/protocol/src/drivers/voltcraft.test.ts` (vectors derived from the worked examples + the emulator-oracle decoder)
 - Shared types: `packages/protocol/src/drivers/types.ts` (`Driver`/`DriverFramer`), `packages/protocol/src/types.ts` (`Reading`, `unitInfo`)
-- Ground truth: the official Voltcraft series800 app (OWON `com.owon.imeter`), verified via the `fake-ble-meter` BLE emulator oracle (`tests/decode_voltcraft.py` = the R10W parser port; `fakemeter/profiles/voltcraft.py` = the matching encoder). Confirmed live 2026-06-10.
+- Ground truth: the `fake-ble-meter` BLE emulator oracle (`tests/decode_voltcraft.py` = the R10W parser port; `fakemeter/profiles/voltcraft.py` = the matching encoder). Confirmed live 2026-06-10.

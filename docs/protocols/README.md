@@ -23,7 +23,7 @@ matrix, see [`../HARDWARE.md`](../HARDWARE.md).
 | `ut181a` | UT181A | ISSC · name | ⏳ `untested` | [ut181a.md](ut181a.md) |
 | `ut202bt` | UT202BT (clamp) | ISSC · name | 🔄 `expected` | [ut202bt.md](ut202bt.md) |
 | `ut219p` | UT219P (power clamp) | ISSC · name | ⏳ `untested` | [ut219p.md](ut219p.md) |
-| `bdm` | Aneng / BSIDE / ZOYI / BABATools | `0xFFF0` · sniff 11 B | ⏳ `untested` | [bdm.md](bdm.md) |
+| `bdm` | Aneng / BSIDE / ZOYI / BABATools | `0xFFF0` · sniff 10/11 B | AN9002, ZT-5B ✅ `verified` | [bdm.md](bdm.md) |
 | `owon-plus` | Owon B35T+/B41T+/OW18E/CM2100B | `0xFFF0` · sniff 6 B | ⏳ `untested` | [owon-plus.md](owon-plus.md) |
 | `owon-old` | Owon B35T (legacy text) | `0xFFF0` · sniff 14 B | ⏳ `untested` | [owon-old.md](owon-old.md) |
 | `voltcraft` | Voltcraft VC800/VC900 | `0xFFF0` · sniff 15 B | ⏳ `untested` | [voltcraft.md](voltcraft.md) |
@@ -39,5 +39,7 @@ Two transports, two routing strategies:
   session routes them by advertised **name**.
 - **Generic "Bluetooth DMM" clones** — **free-stream** measurements with no handshake. Four families
   share GATT `0xFFF0` (notify `0xFFF4`, write `0xFFF3`) and are told apart by **frame length** via
-  each driver's `sniff()`: `bdm` 11 B · `owon-plus` 6 B · `owon-old` 14 B · `voltcraft` 15 B. `ai-care`
-  owns its own `0xFFB0` service outright, so it needs no sniff. This family is receive-only.
+  each driver's `sniff()`: `bdm` 10/11 B · `owon-plus` 6 B · `owon-old` 14 B · `voltcraft` 15 B.
+  `ai-care` owns its own `0xFFB0` service outright, so it needs no sniff. This family is receive-only.
+  `bdm` itself spans device-types selected by descrambled `byte[2]` — S_5G (10 B) and AB_300 (11 B)
+  are decoded; QB_5G/P_66 aren't (see [bdm.md](bdm.md)).
