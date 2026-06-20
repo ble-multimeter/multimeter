@@ -550,6 +550,50 @@ describe('bdm decode edge cases + driver wiring', () => {
 
   it('exposes the FFF0 GATT profile and the backlight control is absent', () => {
     expect(bdm.gatt.service).toBe('0000fff0-0000-1000-8000-00805f9b34fb');
-    expect(bdm.verification).toBe('ported-unverified');
+    expect(bdm.verification).toBe('live-tested');
+  });
+});
+
+describe('bdm S_5G (device-type 2, 10-byte) — ZOYI ZT-5B', () => {
+  // Real ZT-5B capture (raw notification) taken at connect, while the meter showed its "AUTO"
+  // splash on the digits. Descrambles to 5a a5 02 e0 2e 63 25 87 00 00 — byte[2]=0x02 → S_5G.
+  const AUTO = [0x1b, 0x84, 0x71, 0xb5, 0x8c, 0xa2, 0x17, 0xf6, 0x66, 0xaa];
+
+  it('dispatches a 10-byte frame to the S_5G decoder via the device-type byte', () => {
+    const r = decodeBdm(Uint8Array.from(AUTO), 5);
+    expect(r.displayText).toBe('AUTO'); // glyph table (shared with AB_300) renders the splash text
+    expect(r.displayValue).toBeNull(); // non-numeric → no value
+    expect(r.displayUnit).toBe(''); // unit bytes (8,9) are zero in this frame
+    expect(r.acdc).toBe('');
+    expect(r.ts).toBe(5);
+  });
+
+  it('the framer slices a 10-byte S_5G frame (one notification == one frame)', () => {
+    const f = bdm.createFramer();
+    const out = f.push(Uint8Array.from(AUTO));
+    expect(out).toHaveLength(1);
+    expect([...out[0]!.bytes]).toEqual(AUTO);
+  });
+
+  it('the sniffer accepts the 10-byte S_5G frame', () => {
+    expect(bdm.sniff!(Uint8Array.from(AUTO))).toBe(true);
+  });
+
+  // Synthetic S_5G frame exercising the annunciator layout: build a descrambled frame with a known
+  // value + unit + flags, then re-scramble it so it travels the full decode path.
+  const scramble = (descrambled: number[]): number[] =>
+    descrambled.map((b, i) => (b ^ [65, 33, 115, 85, 162, 193, 50, 113, 102, 170][i]!) & 0xff);
+
+  it('decodes a DC volt reading with HOLD via the S_5G bit layout', () => {
+    // A minimal descrambled frame setting only the bits this driver reads:
+    //   byte3 (abs24..31) = 0x02 → abs30 = HOLD
+    //   byte8 (abs64..71) = 0x06 → abs69 = DC, abs70 = V
+    const descrambled = [0x5a, 0xa5, 0x02, 0x02, 0x00, 0x00, 0x00, 0x00, 0x06, 0x00];
+    const r = decodeBdm(Uint8Array.from(scramble(descrambled)));
+    expect(r.acdc).toBe('DC');
+    expect(r.displayUnit).toBe('V');
+    expect(r.baseUnit).toBe('V');
+    expect(r.flags.hold).toBe(true);
+    expect(r.function).toBe('DCV');
   });
 });
