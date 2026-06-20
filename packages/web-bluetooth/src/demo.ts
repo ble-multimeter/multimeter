@@ -59,7 +59,7 @@ export const DEMO_PROFILES: Record<'volts' | 'amps', DemoProfile> = {
   volts: {
     id: 'demo-v',
     role: 'V source',
-    deviceName: 'UT60BT (demo V)',
+    deviceName: 'Demo meter (V)',
     fn: 'DCV',
     value: wanderVolts,
     fullScale: 6, // 6 V range
@@ -68,7 +68,7 @@ export const DEMO_PROFILES: Record<'volts' | 'amps', DemoProfile> = {
   amps: {
     id: 'demo-a',
     role: 'I source',
-    deviceName: 'UT60BT (demo A)',
+    deviceName: 'Demo meter (A)',
     fn: 'DCA',
     value: wanderAmps,
     fullScale: 6, // 6 A range
@@ -76,12 +76,12 @@ export const DEMO_PROFILES: Record<'volts' | 'amps', DemoProfile> = {
   },
 };
 
-// The legacy single-DCV demo, kept as the default so a bare `?demo` is byte-for-byte unchanged
-// (same device name "UT60BT (demo)"). The named `volts` profile carries the multi-meter label
-// ("UT60BT (demo V)") so the power scenario's two cards read distinctly.
+// The legacy single-DCV demo, kept as the default so a bare `?demo` behaves unchanged. The named
+// `volts`/`amps` profiles carry distinct labels ("Demo meter (V)"/"(A)") so the power scenario's
+// two cards read distinctly. Labels are vendor-neutral — the demo stands in for any supported meter.
 export const DEFAULT_DEMO_PROFILE: DemoProfile = {
   ...DEMO_PROFILES.volts,
-  deviceName: 'UT60BT (demo)',
+  deviceName: 'Demo meter',
 };
 
 // Build a full Reading for `profile` at `tSec`, matching what decode() would produce for the

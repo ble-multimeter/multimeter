@@ -53,7 +53,7 @@ export function ConnectionStatus({ meter }: { meter: Meter }) {
     <>
       <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${DOT[state]}`} aria-hidden="true" />
       <div className="flex flex-col text-left leading-tight">
-        <span className="text-sm font-semibold text-zinc-200">{deviceName ?? 'UT60BT'}</span>
+        <span className="text-sm font-semibold text-zinc-200">{deviceName ?? 'Multimeter'}</span>
         <span className="text-xs text-zinc-400">{STATE_LABEL[state]}</span>
       </div>
 

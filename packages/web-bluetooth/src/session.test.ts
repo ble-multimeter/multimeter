@@ -397,7 +397,7 @@ describe('MeterSession — demo mode', () => {
 
     s.connect();
     expect(s.getSnapshot().state).toBe('live');
-    expect(s.getSnapshot().deviceName).toContain('demo');
+    expect(s.getSnapshot().deviceName).toContain('Demo');
 
     // Advance one demo interval → a synthetic reading appears.
     await vi.advanceTimersByTimeAsync(250);

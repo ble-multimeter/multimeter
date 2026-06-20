@@ -3,9 +3,10 @@
 [![CI](https://github.com/ble-multimeter/multimeter/actions/workflows/ci.yml/badge.svg)](https://github.com/ble-multimeter/multimeter/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/ble-multimeter/multimeter/graph/badge.svg)](https://codecov.io/gh/ble-multimeter/multimeter)
 
-A browser companion for the **UNI-T UT60BT** Bluetooth multimeter: a live, full-screen
-readout with charting, statistics, recording, and CSV/PNG export. It runs entirely in your
-browser over [Web Bluetooth](https://developer.mozilla.org/docs/Web/API/Web_Bluetooth_API) —
+A browser companion for Bluetooth multimeters — **UNI-T, OWON, Aneng, BSIDE/ZOYI, Voltcraft &
+AICARE** — with a live, full-screen readout, charting, statistics, recording, and CSV/PNG export.
+It runs entirely in your browser over
+[Web Bluetooth](https://developer.mozilla.org/docs/Web/API/Web_Bluetooth_API) —
 no install, no account, no data leaves your machine — and installs as an offline PWA.
 
 **▶︎ [Open the app](https://ble-multimeter.github.io/multimeter/)** &nbsp;·&nbsp;
@@ -26,15 +27,24 @@ no install, no account, no data leaves your machine — and installs as an offli
 - **Export** — download any session as **CSV**, or the chart as a **PNG**.
 - **Hold, Pin & Copy** — freeze the readout, pin a value to read hands-free while the stream
   runs, or copy the current reading to the clipboard.
-- **All UT60BT functions** — V / A / Ω, continuity, diode, capacitance, frequency, duty %,
+- **Full function coverage** — V / A / Ω, continuity, diode, capacitance, frequency, duty %,
   temperature, and NCV.
+- **Multiple meters at once** — connect several meters and watch them side by side on one bench
+  view (e.g. a V and an A meter for live power).
 - **PWA** — installable, works offline, light/dark theme that also drives the system UI bars.
 - **Keyboard-driven & accessible** — full shortcut set and a screen-reader announce key.
 
 ## Screenshots
 
+**Multiple meters on one bench** — connect several at once (here a V and an A meter) with a live
+**P = V × I** derived channel, all on one synchronized chart:
+
 <p align="center">
-  <img src="assets/live.gif" alt="Live readout updating" width="70%">
+  <img src="assets/power-dark.png" alt="Combined view: two meters plus a P=V×I derived channel" width="100%">
+</p>
+
+<p align="center">
+  <img src="assets/live.gif" alt="Live multi-meter readout updating" width="70%">
 </p>
 
 <p align="center">
@@ -105,17 +115,16 @@ pnpm lint        # eslint across the workspace
 
 ## How it works
 
-The UT60BT speaks a simple BLE protocol: the app subscribes to a notify characteristic,
-runs the meter's handshake, and decodes each 19-byte measurement frame into a reading
-(function, value, unit, flags). The protocol was reverse-engineered from the device; decode
-logic is pure and unit-tested against captured frames. Decode + framing sit behind a `Driver`
-interface in the protocol package, so other BLE multimeters can be added as drivers without
-touching the transport, recording, or UI (a later phase).
+Each meter speaks a simple BLE protocol: the app subscribes to a notify characteristic, runs the
+meter's handshake, and decodes each measurement frame into a reading (function, value, unit, flags).
+Decode logic is pure and unit-tested against captured frames. Decode + framing sit behind a `Driver`
+interface in the protocol package, so meters from several vendors are supported and new ones can be
+added without touching the transport, recording, or UI.
 
 ## Supported meters & protocols
 
-The app targets the UT60BT, but the protocol package ships drivers for a range of UNI-T and generic
-Bluetooth multimeters (Aneng / BSIDE / ZOYI, Owon, Voltcraft, AICARE). See the
+The app ships drivers for a range of UNI-T and generic Bluetooth multimeters across several vendors —
+UNI-T, Aneng / BSIDE / ZOYI, Owon, Voltcraft, and AICARE. See the
 **[hardware support list](docs/HARDWARE.md)** for every model and its verification state, and
 **[docs/protocols/](docs/protocols/README.md)** for a per-driver protocol spec.
 
@@ -126,7 +135,7 @@ BLE-multimeter UI (in React **or** Vue) or a headless Node tool on top:
 
 | Package                               | What it is                                                                                                                                                                |
 | ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@ble-multimeter/protocol`      | Pure, I/O-free core: the `Reading` model + unit tables, the uni-t decode/framing, stats/decimate/CSV, and the device-`Driver` interface + registry. Zero deps; Node-safe. |
+| `@ble-multimeter/protocol`      | Pure, I/O-free core: the `Reading` model + unit tables, the per-vendor decoders/framing, stats/decimate/CSV, and the device-`Driver` interface + registry. Zero deps; Node-safe. |
 | `@ble-multimeter/web-bluetooth` | Web Bluetooth `Transport` + the framework-agnostic `MeterSession` engine (connect · handshake · keep-alive · reconnect · demo).                                           |
 | `@ble-multimeter/recorder`      | Bluetooth-independent `RecorderSession` · `SessionsStore` · `PinRecorder` engines + the IndexedDB session store.                                                          |
 | `@ble-multimeter/react`         | React hooks: `useMeter` · `useRecorder` · `useSessions` · `usePinSession`.                                                                                                |

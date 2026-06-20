@@ -139,7 +139,7 @@ describe('useMeter', () => {
     const { result } = renderHook(() => useMeter());
     // The mount effect calls session.connect() because session.isDemo is true.
     await waitFor(() => expect(result.current.state).toBe('live'));
-    expect(result.current.deviceName).toBe('UT60BT (demo)');
+    expect(result.current.deviceName).toBe('Demo meter');
     await waitFor(() => expect(result.current.reading?.function).toBe('DCV'));
   });
 

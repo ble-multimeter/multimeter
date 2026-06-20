@@ -5,7 +5,7 @@ export function UnsupportedBrowser() {
   const demoHref = `${window.location.pathname}?demo`;
   return (
     <div className="flex min-h-dvh flex-col items-center justify-center gap-4 px-6 text-center">
-      <h1 className="text-2xl font-bold text-zinc-100">UT60BT needs Web Bluetooth</h1>
+      <h1 className="text-2xl font-bold text-zinc-100">This app needs Web Bluetooth</h1>
       <p className="max-w-md text-zinc-400">
         This browser doesn't support Web Bluetooth, so it can't talk to the meter. Open this page in{' '}
         <strong className="text-zinc-200">Chrome</strong>,{' '}

@@ -119,7 +119,7 @@ describe('vue useMeter (engine-driven)', () => {
     const scope = effectScope();
     const api = scope.run(() => useMeter())!;
     await vi.waitFor(() => expect(api.state.value).toBe('live'));
-    expect(api.deviceName.value).toBe('UT60BT (demo)');
+    expect(api.deviceName.value).toBe('Demo meter');
     scope.stop();
   });
 
