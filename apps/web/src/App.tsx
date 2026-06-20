@@ -99,6 +99,30 @@ export default function App() {
     }
   }, [location]);
 
+  // Dev-only automation hook for the BLE matrix harness (tools/ble-matrix): the CDP driver reads
+  // the live per-meter snapshot — including the matched `driverId`, which the visible UI doesn't
+  // surface — and drives connect/disconnect against a fakemeter peripheral to assert that each
+  // driver connects and decodes. metersRef keeps it reading fresh state without re-installing.
+  // Stripped from production builds by the import.meta.env.DEV guard.
+  const metersRef = useRef(meters);
+  metersRef.current = meters;
+  useEffect(() => {
+    if (!import.meta.env.DEV) return;
+    const pick = (i: number) => {
+      const m = metersRef.current;
+      return m.meterSession(m.meters[i]?.id ?? '');
+    };
+    window.__bleMatrix = {
+      meters: () =>
+        metersRef.current.meters.map((m, i) => ({ id: m.id, ...pick(i)?.getSnapshot() })),
+      connect: (i = 0) => pick(i)?.connect(),
+      disconnect: (i = 0) => pick(i)?.disconnect(),
+    };
+    return () => {
+      delete window.__bleMatrix;
+    };
+  }, []);
+
   // Pin captures the first live meter channel's reading (the primary measurement).
   const primaryReading = meters.meters.find(m => m.reading)?.reading ?? null;
   const pinReading = () => {

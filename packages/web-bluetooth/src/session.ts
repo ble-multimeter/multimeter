@@ -37,6 +37,7 @@ export interface MeterSnapshot {
   deviceName: string | null;
   error: string | null;
   controls: MeterControl[]; // front-panel controls the active driver exposes (empty when idle)
+  driverId: string | null; // id of the matched/sniffed driver (null until one is committed)
 }
 
 const errMsg = (e: unknown) => (e instanceof Error ? `${e.name}: ${e.message}` : String(e));
@@ -88,7 +89,14 @@ export class MeterSession {
     this.demoProfile = opts.demoProfile ?? DEFAULT_DEMO_PROFILE;
     // Demo never touches Bluetooth, so it must run even where Web Bluetooth is absent.
     const state: MeterState = this.isDemo || Transport.supported ? 'idle' : 'unsupported';
-    this.snap = { state, reading: null, deviceName: null, error: null, controls: [] };
+    this.snap = {
+      state,
+      reading: null,
+      deviceName: null,
+      error: null,
+      controls: [],
+      driverId: null,
+    };
   }
 
   /** Control names the active driver exposes, for the snapshot (empty when no driver). */
@@ -110,7 +118,10 @@ export class MeterSession {
   getSnapshot = (): MeterSnapshot => this.snap;
 
   private set(partial: Partial<MeterSnapshot>): void {
-    this.snap = { ...this.snap, ...partial };
+    // driverId always tracks the committed driver — set() is called after every this.driver
+    // assignment (connect/sniff/demo) and after it's cleared on disconnect, so derive it centrally
+    // rather than threading it through each call site.
+    this.snap = { ...this.snap, ...partial, driverId: this.driver?.id ?? null };
     for (const l of this.listeners) l();
   }
 
